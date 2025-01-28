@@ -1,0 +1,20 @@
+{
+  "domain": "laifen_ble",
+  "name": "Laifen BLE",
+  "config_flow": true,
+  "documentation": "https://github.com/bkbilly/laifen_ble",
+  "issue_tracker": "https://github.com/bkbilly/laifen_ble/issues",
+  "bluetooth": [
+    {
+      "service_uuid": "0000ff01-0000-1000-8000-00805f9b34fb"
+    }
+  ],
+  "requirements": [],
+  "ssdp": [],
+  "zeroconf": [],
+  "homekit": {},
+  "dependencies": ["bluetooth"],
+  "codeowners": ["@RamiRihawi"],
+  "iot_class": "local_push",
+  "version": "0.0.0"
+}
