@@ -1,0 +1,9 @@
+{
+  "name": "Laifen",
+  "content_in_root": false,
+  "domains": ["sensor"],
+  "country": [],
+  "homeassistant": "2021.6.0",
+  "iot_class": "local_polling",
+  "render_readme": true
+}
