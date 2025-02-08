@@ -62,6 +62,7 @@ class Laifen:
             try:
                 if not self.client.is_connected:
                     await self.connect()
+                await self.start_notifications()
                 async with async_timeout.timeout(10):  # Set a timeout of 10 seconds
                     data = await self.client.read_gatt_char(CHARACTERISTIC_UUID)
                     _LOGGER.warning(f"Gather data: {data}")
