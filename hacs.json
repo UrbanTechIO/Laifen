@@ -2,5 +2,7 @@
   "name": "Laifen",
   "content_in_root": false,
   "homeassistant": "2021.6.0",
+  "filename": "custom_components/laifen_ble",
+  "full_name": "UrbanTechIO/Laifen",
   "render_readme": true
 }
