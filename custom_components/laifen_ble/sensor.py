@@ -46,21 +46,75 @@ SENSORS = (
         icon="mdi:toothbrush-electric",
     ),
     LaifenSensorEntityDescription(
-        key="vibration_strength",
-        name="Vibration Strength",
-        unique_id="laifen_vibration_strength",
+        key="vibration_strength_mode_1",
+        name="Vibration Strength Mode 1",
+        unique_id="laifen_vibration_strength_mode_1",
         icon="mdi:zodiac-aquarius",
     ),
     LaifenSensorEntityDescription(
-        key="oscillation_range",
-        name="Oscillation Range",
-        unique_id="laifen_oscillation_range",
+        key="oscillation_range_mode_1",
+        name="Oscillation Range Mode 1",
+        unique_id="laifen_oscillation_range_mode_1",
         icon="mdi:arrow-oscillating",
     ),
     LaifenSensorEntityDescription(
-        key="oscillation_speed",
-        name="Oscillation Speed",
-        unique_id="laifen_oscillation_speed",
+        key="oscillation_speed_mode_1",
+        name="Oscillation Speed Mode 1",
+        unique_id="laifen_oscillation_speed_mode_1",
+        icon="mdi:speedometer",
+    ),
+    LaifenSensorEntityDescription(
+        key="vibration_strength_mode_2",
+        name="Vibration Strength Mode 2",
+        unique_id="laifen_vibration_strength_mode_2",
+        icon="mdi:zodiac-aquarius",
+    ),
+    LaifenSensorEntityDescription(
+        key="oscillation_range_mode_2",
+        name="Oscillation Range Mode 2",
+        unique_id="laifen_oscillation_range_mode_2",
+        icon="mdi:arrow-oscillating",
+    ),
+    LaifenSensorEntityDescription(
+        key="oscillation_speed_mode_2",
+        name="Oscillation Speed Mode 2",
+        unique_id="laifen_oscillation_speed_mode_2",
+        icon="mdi:speedometer",
+    ),
+    LaifenSensorEntityDescription(
+        key="vibration_strength_mode_3",
+        name="Vibration Strength Mode 3",
+        unique_id="laifen_vibration_strength_mode_3",
+        icon="mdi:zodiac-aquarius",
+    ),
+    LaifenSensorEntityDescription(
+        key="oscillation_range_mode_3",
+        name="Oscillation Range Mode 3",
+        unique_id="laifen_oscillation_range_mode_3",
+        icon="mdi:arrow-oscillating",
+    ),
+    LaifenSensorEntityDescription(
+        key="oscillation_speed_mode_3",
+        name="Oscillation Speed Mode 3",
+        unique_id="laifen_oscillation_speed_mode_3",
+        icon="mdi:speedometer",
+    ),
+    LaifenSensorEntityDescription(
+        key="vibration_strength_mode_4",
+        name="Vibration Strength Mode 4",
+        unique_id="laifen_vibration_strength_mode_4",
+        icon="mdi:zodiac-aquarius",
+    ),
+    LaifenSensorEntityDescription(
+        key="oscillation_range_mode_4",
+        name="Oscillation Range Mode 4",
+        unique_id="laifen_oscillation_range_mode_4",
+        icon="mdi:arrow-oscillating",
+    ),
+    LaifenSensorEntityDescription(
+        key="oscillation_speed_mode_4",
+        name="Oscillation Speed Mode 4",
+        unique_id="laifen_oscillation_speed_mode_4",
         icon="mdi:speedometer",
     ),
     LaifenSensorEntityDescription(
@@ -68,6 +122,20 @@ SENSORS = (
         name="Mode",
         unique_id="laifen_mode",
         icon="mdi:dots-horizontal",
+    ),
+    LaifenSensorEntityDescription(
+        key="battery_level",
+        name="Battery Level",
+        unique_id="laifen_battery_level",
+        icon="mdi:battery",
+        device_class=SensorDeviceClass.BATTERY,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    LaifenSensorEntityDescription(
+        key="brushing_timer",
+        name="Brushing Timer",
+        unique_id="laifen_brushing_timer",
+        icon="mdi:timer",
     ),
     LaifenSensorEntityDescription(
         key="timer",
@@ -86,8 +154,8 @@ async def async_setup_entry(
     """Set up the sensor platform."""
     data = hass.data[DOMAIN][entry.entry_id]
     coordinator = LaifenDataUpdateCoordinator(hass, data.device)
-    await coordinator.async_config_entry_first_refresh()    #added !
-    _LOGGER.warning("Adding Laifen sensor entities")    #added !
+    await coordinator.async_config_entry_first_refresh()
+    _LOGGER.warning("Adding Laifen sensor entities")
     async_add_entities(
         LaifenSensor(data.coordinator, data.device, description)
         for description in SENSORS
@@ -110,6 +178,12 @@ class LaifenSensor(CoordinatorEntity, SensorEntity):
         self._update_interval = SCAN_INTERVAL  # Store the update interval
         self._update_listener = None  # Initialize the update listener
 
+        # Set device class and state class if defined in the description
+        if hasattr(description, "device_class"):
+            self._attr_device_class = description.device_class
+        if hasattr(description, "state_class"):
+            self._attr_state_class = description.state_class
+
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self.device.ble_device.address)},
             manufacturer="Laifen",
@@ -128,33 +202,15 @@ class LaifenSensor(CoordinatorEntity, SensorEntity):
         if self.device.result is None:
             return self._last_valid_value  # Return the last valid value
 
-        if self.entity_description.key == "status":
+        key = self.entity_description.key
+        if key == "status":
             value = self.device.result.get("status")
-            self._last_valid_value = "Running" if value == "1" else "Idle"
-            # return self._last_valid_value
-        elif self.entity_description.key == "vibration_strength":
-            value = self.device.result.get("vibration_strength")
             self._last_valid_value = value  # Cache the last valid value
-            # return value
-        elif self.entity_description.key == "oscillation_range":
-            value = self.device.result.get("oscillation_range")
-            self._last_valid_value = value  # Cache the last valid value
-            # return value
-        elif self.entity_description.key == "oscillation_speed":
-            value = self.device.result.get("oscillation_speed")
-            self._last_valid_value = value  # Cache the last valid value
-            # return value
-        elif self.entity_description.key == "mode":
-            value = self.device.result.get("mode")
-            self._last_valid_value = {
-                "0": "1",
-                "1": "2",
-                "2": "3",
-                "3": "4"
-            }.get(value, value)
-        elif self.entity_description.key == "timer":
-            # _LOGGER.warning(f"Timer Value: {self._timer_state}")
+        elif key == "timer":
             self._last_valid_value = self._timer_state
+        else:
+            value = self.device.result.get(key)
+            self._last_valid_value = value  # Cache the last valid value
         return self._last_valid_value
 
     async def async_added_to_hass(self):
@@ -165,20 +221,19 @@ class LaifenSensor(CoordinatorEntity, SensorEntity):
         self._update_listener = async_track_time_interval(self.hass, self.async_update, self._update_interval)
         asyncio.create_task(self.device.check_connection())  # Start the connection check task
 
-
     async def async_update(self, *args):
         """Update the sensor state."""
         await self.coordinator.async_request_refresh()
         if self.device.result is not None:
-            # _LOGGER.warning("Timer async update YEeeeeeeee:")
             status = self.device.result.get("status")
-            if status == "1" and self._timer_task is None:
+            if status == "Running" and self._timer_task is None:
+                self._timer_state = 0  # Reset timer when starting
                 self._timer_task = asyncio.create_task(self._run_timer())
-            elif status == "0" and self._timer_task is not None:
+            elif status == "Idle" and self._timer_task is not None:
                 self._timer_task.cancel()
                 self._timer_task = None
-                self._timer_state = 0
-        # _LOGGER.warning("Timer async update Noooooooo:")
+                self._timer_state = 0  # Reset timer when stopped
+
     async def _run_timer(self):
         """Run the timer."""
         try:
@@ -188,6 +243,7 @@ class LaifenSensor(CoordinatorEntity, SensorEntity):
                 await asyncio.sleep(1)  # Add a 1-second delay
         except asyncio.CancelledError:
             pass
+
 
 class LaifenDataUpdateCoordinator(DataUpdateCoordinator):
     """Class to manage fetching Laifen data."""
