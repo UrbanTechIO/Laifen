@@ -40,7 +40,7 @@ class LaifenCoordinator(DataUpdateCoordinator):
             return self.laifen.result
         except BleakError as e:
             _LOGGER.error(f"Error updating data: {e}")
-            return None  # Return None or handle it appropriately
+            return UpdateFailed(f"Error updating data: {e}")
 
     @callback
     def async_handle_notification(self, data):
@@ -69,12 +69,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator.laifen = laifen
 
     @callback
-    def _async_update_ble(
+    async def _async_update_ble(
         service_info: bluetooth.BluetoothServiceInfoBleak,
         change: bluetooth.BluetoothChange,
     ) -> None:
         """Update from a ble callback."""
-        laifen.set_ble_device(service_info.device)
+        await laifen.set_ble_device(service_info.device)
 
     entry.async_on_unload(
         bluetooth.async_register_callback(
@@ -98,6 +98,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = LaifenData(
         entry.title, laifen, coordinator
     )
+
+    # Register the device
+    from homeassistant.helpers.device_registry import async_get
+    device_registry = async_get(hass)
+    device_registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, address)},
+        manufacturer="Laifen",
+        name="Laifen Toothbrush",
+        model="Laifen BLE",
+        sw_version="1.0.0",
+    )
+
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
