@@ -13,6 +13,7 @@
   "homekit": {},
   "dependencies": ["bluetooth"],
   "documentation": "https://github.com/UrbanTechIO/Laifen",
+  "issue_tracker": "https://github.com/UrbanTechIO/Laifen/issues",
   "codeowners": ["@UrbanTechIO"],
   "iot_class": "local_push",
   "version": "1.0.2"
