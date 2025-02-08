@@ -9,6 +9,7 @@ SERVICE_UUID = "0000ff01-0000-1000-8000-00805f9b34fb"
 CHARACTERISTIC_UUID = "0000ff02-0000-1000-8000-00805f9b34fb"
 RETRY_LIMIT = 5  # Set a retry limit for connection attempts
 
+
 class Laifen:
     def __init__(self, ble_device, coordinator):
         self.ble_device = ble_device
@@ -16,6 +17,7 @@ class Laifen:
         self.coordinator = coordinator
         self.result = None
         self.lock = asyncio.Lock()  # Create a lock
+        self._first_message = True  # Flag to ignore the first message
         _LOGGER.warning("Laifen instance created")
 
     async def scan_for_device(self):
@@ -32,7 +34,6 @@ class Laifen:
         return False
 
     async def connect(self):
-        # async with self.lock:
         _LOGGER.warning("Attempting to connect...")
         if self.client.is_connected:
             _LOGGER.warning("Already connected to Laifen brush")
@@ -76,7 +77,6 @@ class Laifen:
                 self.result = self.result
 
     async def start_notifications(self):
-        # async with self.lock:
         _LOGGER.warning("Starting notifications...")
         if not self.client.is_connected:
             _LOGGER.warning("Device not connected, scanning for Laifen brush...")
@@ -112,6 +112,11 @@ class Laifen:
 
     def notification_handler(self, sender, data):
         _LOGGER.warning(f"Notification received from {sender}: {data}")
+        if self._first_message:
+            _LOGGER.warning("Ignoring first message (subscription confirmation)")
+            self._first_message = False
+            return
+
         parsed_result = self.parse_data(data)
         if not parsed_result["raw_data"].startswith("01020304050607"):
             self.result = parsed_result
@@ -126,37 +131,93 @@ class Laifen:
             return {
                 "raw_data": "",
                 "status": None,
-                "vibration_strength": None,
-                "oscillation_range": None,
-                "oscillation_speed": None,
+                "vibration_strength_mode_1": None,
+                "oscillation_range_mode_1": None,
+                "oscillation_speed_mode_1": None,
+                "vibration_strength_mode_2": None,
+                "oscillation_range_mode_2": None,
+                "oscillation_speed_mode_2": None,
+                "vibration_strength_mode_3": None,
+                "oscillation_range_mode_3": None,
+                "oscillation_speed_mode_3": None,
+                "vibration_strength_mode_4": None,
+                "oscillation_range_mode_4": None,
+                "oscillation_speed_mode_4": None,
                 "mode": None,
+                "battery_level": None,
+                "brushing_timer": None,
                 "timer": None,
             }
+
         data_str = data.hex()
         if len(data_str) < 32:  # Ensure the string is long enough
             _LOGGER.error("Data string is too short")
             return {
                 "raw_data": data_str,
                 "status": None,
-                "vibration_strength": None,
-                "oscillation_range": None,
-                "oscillation_speed": None,
+                "vibration_strength_mode_1": None,
+                "oscillation_range_mode_1": None,
+                "oscillation_speed_mode_1": None,
+                "vibration_strength_mode_2": None,
+                "oscillation_range_mode_2": None,
+                "oscillation_speed_mode_2": None,
+                "vibration_strength_mode_3": None,
+                "oscillation_range_mode_3": None,
+                "oscillation_speed_mode_3": None,
+                "vibration_strength_mode_4": None,
+                "oscillation_range_mode_4": None,
+                "oscillation_speed_mode_4": None,
                 "mode": None,
+                "battery_level": None,
+                "brushing_timer": None,
                 "timer": None,
             }
-        status = data_str[47]
-        mode = data_str[9]
-        vibration_strength = data_str[11]
-        oscillation_range = data_str[13]
-        oscillation_speed = data_str[15]
+
+        # Parse the data string
+        status = "Running" if data_str[47] == "1" else "Idle"  # Byte 47 for status
+        mode = str(int(data_str[9], 16) + 1)  # Byte 9 for mode (add 1 for human-readable mode)
+        battery_level = int(data_str[36:38], 16)  # Bytes 35-36 for battery percentage
+        brushing_timer = int(data_str[40:44], 16)  # Bytes 35-36 for battery percentage
+
+        # Mode 1
+        vibration_strength_mode_1 = int(data_str[10:12], 16)  # Bytes 10-11 (hex to decimal)
+        oscillation_range_mode_1 = int(data_str[12:14], 16)  # Bytes 12-13 (hex to decimal)
+        oscillation_speed_mode_1 = int(data_str[14:16], 16)  # Bytes 14-15 (hex to decimal)
+
+        # Mode 2
+        vibration_strength_mode_2 = int(data_str[16:18], 16)  # Bytes 16-17 (hex to decimal)
+        oscillation_range_mode_2 = int(data_str[18:20], 16)  # Bytes 18-19 (hex to decimal)
+        oscillation_speed_mode_2 = int(data_str[20:22], 16)  # Bytes 20-21 (hex to decimal)
+
+        # Mode 3
+        vibration_strength_mode_3 = int(data_str[22:24], 16)  # Bytes 22-23 (hex to decimal)
+        oscillation_range_mode_3 = int(data_str[24:26], 16)  # Bytes 24-25 (hex to decimal)
+        oscillation_speed_mode_3 = int(data_str[26:28], 16)  # Bytes 26-27 (hex to decimal)
+
+        # Mode 4
+        vibration_strength_mode_4 = int(data_str[28:30], 16)  # Bytes 28-29 (hex to decimal)
+        oscillation_range_mode_4 = int(data_str[30:32], 16)  # Bytes 30-31 (hex to decimal)
+        oscillation_speed_mode_4 = int(data_str[32:34], 16)  # Bytes 32-33 (hex to decimal)
+
         return {
             "raw_data": data_str,
             "status": status,
+            "vibration_strength_mode_1": vibration_strength_mode_1,
+            "oscillation_range_mode_1": oscillation_range_mode_1,
+            "oscillation_speed_mode_1": oscillation_speed_mode_1,
+            "vibration_strength_mode_2": vibration_strength_mode_2,
+            "oscillation_range_mode_2": oscillation_range_mode_2,
+            "oscillation_speed_mode_2": oscillation_speed_mode_2,
+            "vibration_strength_mode_3": vibration_strength_mode_3,
+            "oscillation_range_mode_3": oscillation_range_mode_3,
+            "oscillation_speed_mode_3": oscillation_speed_mode_3,
+            "vibration_strength_mode_4": vibration_strength_mode_4,
+            "oscillation_range_mode_4": oscillation_range_mode_4,
+            "oscillation_speed_mode_4": oscillation_speed_mode_4,
             "mode": mode,
-            "vibration_strength": vibration_strength,
-            "oscillation_range": oscillation_range,
-            "oscillation_speed": oscillation_speed,
-            "timer": status,
+            "battery_level": battery_level,
+            "brushing_timer": brushing_timer,
+            "timer": status,  # Timer is derived from status in this example
         }
 
     async def set_ble_device(self, ble_device):
