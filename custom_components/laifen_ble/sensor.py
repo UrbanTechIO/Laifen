@@ -83,12 +83,6 @@ SENSORS = (
         unique_id="laifen_brushing_timer",
         icon="mdi:timer",
     ),
-    LaifenSensorEntityDescription(
-        key="timer",
-        name="Timer",
-        unique_id="laifen_timer",
-        icon="mdi:timer",
-    ),
 )
 
 
@@ -119,7 +113,7 @@ class LaifenSensor(CoordinatorEntity, SensorEntity):
         self.entity_description = description
         self.device = device
         self._last_valid_value = None  # Store the last valid value
-        self._timer_state = 0  # Initialize the timer state
+        self._timer_state = None  # Initialize the timer state
         self._timer_task = None  # Initialize the timer task
         self._update_interval = SCAN_INTERVAL  # Store the update interval
         self._update_listener = None  # Initialize the update listener
@@ -170,8 +164,6 @@ class LaifenSensor(CoordinatorEntity, SensorEntity):
         elif key == "brushing_timer":
             value = self.device.result.get("brushing_timer")
             self._last_valid_value = value  # Cache the last valid value
-        elif key == "timer":
-            self._last_valid_value = self._timer_state
         return self._last_valid_value
 
     async def async_added_to_hass(self):
@@ -188,18 +180,18 @@ class LaifenSensor(CoordinatorEntity, SensorEntity):
         if self.device.result is not None:
             status = self.device.result.get("status")
             if status == "Running" and self._timer_task is None:
-                self._timer_state = 0  # Reset timer when starting
+                self._timer_state = self.device.result.get("brushing_timer")
                 self._timer_task = asyncio.create_task(self._run_timer())
             elif status == "Idle" and self._timer_task is not None:
                 self._timer_task.cancel()
                 self._timer_task = None
-                self._timer_state = 0  # Reset timer when stopped
+                self._timer_state = self.device.result.get("brushing_timer")
 
     async def _run_timer(self):
         """Run the timer."""
         try:
             while True:
-                self._timer_state += 1
+                self._timer_state -= 1
                 self.async_write_ha_state()  # Update the state in Home Assistant
                 await asyncio.sleep(1)  # Add a 1-second delay
         except asyncio.CancelledError:
