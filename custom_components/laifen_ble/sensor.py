@@ -46,75 +46,21 @@ SENSORS = (
         icon="mdi:toothbrush-electric",
     ),
     LaifenSensorEntityDescription(
-        key="vibration_strength_mode_1",
-        name="Vibration Strength Mode 1",
-        unique_id="laifen_vibration_strength_mode_1",
+        key="vibration_strength",
+        name="Vibration Strength",
+        unique_id="laifen_vibration_strength",
         icon="mdi:zodiac-aquarius",
     ),
     LaifenSensorEntityDescription(
-        key="oscillation_range_mode_1",
-        name="Oscillation Range Mode 1",
-        unique_id="laifen_oscillation_range_mode_1",
+        key="oscillation_range",
+        name="Oscillation Range",
+        unique_id="laifen_oscillation_range",
         icon="mdi:arrow-oscillating",
     ),
     LaifenSensorEntityDescription(
-        key="oscillation_speed_mode_1",
-        name="Oscillation Speed Mode 1",
-        unique_id="laifen_oscillation_speed_mode_1",
-        icon="mdi:speedometer",
-    ),
-    LaifenSensorEntityDescription(
-        key="vibration_strength_mode_2",
-        name="Vibration Strength Mode 2",
-        unique_id="laifen_vibration_strength_mode_2",
-        icon="mdi:zodiac-aquarius",
-    ),
-    LaifenSensorEntityDescription(
-        key="oscillation_range_mode_2",
-        name="Oscillation Range Mode 2",
-        unique_id="laifen_oscillation_range_mode_2",
-        icon="mdi:arrow-oscillating",
-    ),
-    LaifenSensorEntityDescription(
-        key="oscillation_speed_mode_2",
-        name="Oscillation Speed Mode 2",
-        unique_id="laifen_oscillation_speed_mode_2",
-        icon="mdi:speedometer",
-    ),
-    LaifenSensorEntityDescription(
-        key="vibration_strength_mode_3",
-        name="Vibration Strength Mode 3",
-        unique_id="laifen_vibration_strength_mode_3",
-        icon="mdi:zodiac-aquarius",
-    ),
-    LaifenSensorEntityDescription(
-        key="oscillation_range_mode_3",
-        name="Oscillation Range Mode 3",
-        unique_id="laifen_oscillation_range_mode_3",
-        icon="mdi:arrow-oscillating",
-    ),
-    LaifenSensorEntityDescription(
-        key="oscillation_speed_mode_3",
-        name="Oscillation Speed Mode 3",
-        unique_id="laifen_oscillation_speed_mode_3",
-        icon="mdi:speedometer",
-    ),
-    LaifenSensorEntityDescription(
-        key="vibration_strength_mode_4",
-        name="Vibration Strength Mode 4",
-        unique_id="laifen_vibration_strength_mode_4",
-        icon="mdi:zodiac-aquarius",
-    ),
-    LaifenSensorEntityDescription(
-        key="oscillation_range_mode_4",
-        name="Oscillation Range Mode 4",
-        unique_id="laifen_oscillation_range_mode_4",
-        icon="mdi:arrow-oscillating",
-    ),
-    LaifenSensorEntityDescription(
-        key="oscillation_speed_mode_4",
-        name="Oscillation Speed Mode 4",
-        unique_id="laifen_oscillation_speed_mode_4",
+        key="oscillation_speed",
+        name="Oscillation Speed",
+        unique_id="laifen_oscillation_speed",
         icon="mdi:speedometer",
     ),
     LaifenSensorEntityDescription(
@@ -206,11 +152,26 @@ class LaifenSensor(CoordinatorEntity, SensorEntity):
         if key == "status":
             value = self.device.result.get("status")
             self._last_valid_value = value  # Cache the last valid value
+        elif key == "vibration_strength":
+            value = self.device.result.get("vibration_strength")
+            self._last_valid_value = value  # Cache the last valid value
+        elif key == "oscillation_range":
+            value = self.device.result.get("oscillation_range")
+            self._last_valid_value = value  # Cache the last valid value
+        elif key == "oscillation_speed":
+            value = self.device.result.get("oscillation_speed")
+            self._last_valid_value = value  # Cache the last valid value
+        elif key == "mode":
+            value = self.device.result.get("mode")
+            self._last_valid_value = value  # Cache the last valid value
+        elif key == "battery_level":
+            value = self.device.result.get("battery_level")
+            self._last_valid_value = value  # Cache the last valid value
+        elif key == "brushing_timer":
+            value = self.device.result.get("brushing_timer")
+            self._last_valid_value = value  # Cache the last valid value
         elif key == "timer":
             self._last_valid_value = self._timer_state
-        else:
-            value = self.device.result.get(key)
-            self._last_valid_value = value  # Cache the last valid value
         return self._last_valid_value
 
     async def async_added_to_hass(self):
