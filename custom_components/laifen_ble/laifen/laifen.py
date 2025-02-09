@@ -9,6 +9,7 @@ SERVICE_UUID = "0000ff01-0000-1000-8000-00805f9b34fb"
 CHARACTERISTIC_UUID = "0000ff02-0000-1000-8000-00805f9b34fb"
 RETRY_LIMIT = 5  # Set a retry limit for connection attempts
 
+
 class Laifen:
     def __init__(self, ble_device, coordinator):
         self.ble_device = ble_device
@@ -16,6 +17,7 @@ class Laifen:
         self.coordinator = coordinator
         self.result = None
         self.lock = asyncio.Lock()  # Create a lock
+        self._first_message = True  # Flag to ignore the first message
         _LOGGER.warning("Laifen instance created")
 
     async def scan_for_device(self):
@@ -32,7 +34,6 @@ class Laifen:
         return False
 
     async def connect(self):
-        # async with self.lock:
         _LOGGER.warning("Attempting to connect...")
         if self.client.is_connected:
             _LOGGER.warning("Already connected to Laifen brush")
@@ -56,6 +57,32 @@ class Laifen:
         _LOGGER.error("Unable to connect to Laifen brush after retries")
         return False
 
+    async def send_command(self, command: bytes):
+        """Send a HEX command to the Laifen device."""
+        async with self.lock:
+            if not self.client.is_connected:
+                _LOGGER.warning("Device not connected. Attempting to reconnect...")
+                if not await self.connect():
+                    _LOGGER.error("Failed to reconnect, cannot send command.")
+                    return False
+            try:
+                _LOGGER.info(f"Sending command: {command.hex()}")
+                await self.client.write_gatt_char(CHARACTERISTIC_UUID, command)
+                return True
+            except BleakError as e:
+                _LOGGER.error(f"Failed to send command: {e}")
+                return False
+
+    async def turn_on(self):
+        """Turns the Laifen device on."""
+        _LOGGER.info("Turning on the Laifen device...")
+        return await self.send_command(bytes.fromhex("AA0F010101A4"))  # Example command for turning on
+
+    async def turn_off(self):
+        """Turns the Laifen device off."""
+        _LOGGER.info("Turning off the Laifen device...")
+        return await self.send_command(bytes.fromhex("AA0F010100A3"))  # Example command for turning off
+
     async def gatherdata(self):
         async with self.lock:
             _LOGGER.warning("Gathering data...")
@@ -76,7 +103,6 @@ class Laifen:
                 self.result = self.result
 
     async def start_notifications(self):
-        # async with self.lock:
         _LOGGER.warning("Starting notifications...")
         if not self.client.is_connected:
             _LOGGER.warning("Device not connected, scanning for Laifen brush...")
@@ -94,10 +120,6 @@ class Laifen:
                     _LOGGER.warning("Notifications are already enabled, skipping")
                     return
                 _LOGGER.error(f"Failed to start notifications (attempt {attempt+1}/{attempts}): {e}")
-                if "No backend with an available connection slot" in str(e):
-                    _LOGGER.error("No available connection slot. Retrying...")
-                if attempt == attempts - 1:
-                    raise
                 await asyncio.sleep(1)  # Wait a bit before retrying
 
     async def stop_notifications(self):
@@ -112,6 +134,11 @@ class Laifen:
 
     def notification_handler(self, sender, data):
         _LOGGER.warning(f"Notification received from {sender}: {data}")
+        if self._first_message:
+            _LOGGER.warning("Ignoring first message (subscription confirmation)")
+            self._first_message = False
+            return
+
         parsed_result = self.parse_data(data)
         if not parsed_result["raw_data"].startswith("01020304050607"):
             self.result = parsed_result
@@ -130,11 +157,14 @@ class Laifen:
                 "oscillation_range": None,
                 "oscillation_speed": None,
                 "mode": None,
+                "battery_level": None,
+                "brushing_timer": None,
                 "timer": None,
             }
+    
         data_str = data.hex()
-        if len(data_str) < 32:  # Ensure the string is long enough
-            _LOGGER.error("Data string is too short")
+        if len(data_str) != 52:  # Ensure the string is exactly 52 characters long
+            _LOGGER.error(f"Invalid data length: {len(data_str)}. Expected 52 characters.")
             return {
                 "raw_data": data_str,
                 "status": None,
@@ -142,21 +172,33 @@ class Laifen:
                 "oscillation_range": None,
                 "oscillation_speed": None,
                 "mode": None,
+                "battery_level": None,
+                "brushing_timer": None,
                 "timer": None,
             }
-        status = data_str[47]
-        mode = data_str[9]
-        vibration_strength = data_str[11]
-        oscillation_range = data_str[13]
-        oscillation_speed = data_str[15]
+    
+        # Parse the data string
+        status = "Running" if data_str[47] == "1" else "Idle"  # Byte 47 for status
+        mode = str(int(data_str[9], 16) + 1)  # Byte 9 for mode (add 1 for human-readable mode)
+        battery_level = int(data_str[36:38], 16)  # Bytes 36-37 for battery level (hex to decimal)
+        brushing_timer = int(data_str[40:44], 16)  # Bytes 40-43 for brushing timer (hex to decimal)
+    
+        # Extract values for the current mode
+        mode_index = int(data_str[9], 16)  # Byte 9 for mode index (0-based)
+        vibration_strength = int(data_str[10 + (mode_index * 6):12 + (mode_index * 6)], 16)  # Vibration strength for current mode
+        oscillation_range = int(data_str[12 + (mode_index * 6):14 + (mode_index * 6)], 16)  # Oscillation range for current mode
+        oscillation_speed = int(data_str[14 + (mode_index * 6):16 + (mode_index * 6)], 16)  # Oscillation speed for current mode
+    
         return {
             "raw_data": data_str,
             "status": status,
-            "mode": mode,
             "vibration_strength": vibration_strength,
             "oscillation_range": oscillation_range,
             "oscillation_speed": oscillation_speed,
-            "timer": status,
+            "mode": mode,
+            "battery_level": battery_level,
+            "brushing_timer": brushing_timer,
+            "timer": status,  # Timer is derived from status in this example
         }
 
     async def set_ble_device(self, ble_device):
