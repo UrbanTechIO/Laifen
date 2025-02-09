@@ -113,7 +113,7 @@ class LaifenSensor(CoordinatorEntity, SensorEntity):
         self.entity_description = description
         self.device = device
         self._last_valid_value = None  # Store the last valid value
-        self._timer_state = None  # Initialize the timer state
+        self._timer_state = self.device.result.get("brushing_timer")  # Initialize the timer state
         self._timer_task = None  # Initialize the timer task
         self._update_interval = SCAN_INTERVAL  # Store the update interval
         self._update_listener = None  # Initialize the update listener
@@ -146,6 +146,8 @@ class LaifenSensor(CoordinatorEntity, SensorEntity):
         if key == "status":
             value = self.device.result.get("status")
             self._last_valid_value = value  # Cache the last valid value
+        elif key == "brushing_timer":
+            self._last_valid_value = self._timer_state
         elif key == "vibration_strength":
             value = self.device.result.get("vibration_strength")
             self._last_valid_value = value  # Cache the last valid value
@@ -160,9 +162,6 @@ class LaifenSensor(CoordinatorEntity, SensorEntity):
             self._last_valid_value = value  # Cache the last valid value
         elif key == "battery_level":
             value = self.device.result.get("battery_level")
-            self._last_valid_value = value  # Cache the last valid value
-        elif key == "brushing_timer":
-            value = self.device.result.get("brushing_timer")
             self._last_valid_value = value  # Cache the last valid value
         return self._last_valid_value
 
