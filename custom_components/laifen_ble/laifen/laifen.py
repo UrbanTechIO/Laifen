@@ -57,6 +57,32 @@ class Laifen:
         _LOGGER.error("Unable to connect to Laifen brush after retries")
         return False
 
+    async def send_command(self, command: bytes):
+        """Send a HEX command to the Laifen device."""
+        async with self.lock:
+            if not self.client.is_connected:
+                _LOGGER.warning("Device not connected. Attempting to reconnect...")
+                if not await self.connect():
+                    _LOGGER.error("Failed to reconnect, cannot send command.")
+                    return False
+            try:
+                _LOGGER.info(f"Sending command: {command.hex()}")
+                await self.client.write_gatt_char(CHARACTERISTIC_UUID, command)
+                return True
+            except BleakError as e:
+                _LOGGER.error(f"Failed to send command: {e}")
+                return False
+
+    async def turn_on(self):
+        """Turns the Laifen device on."""
+        _LOGGER.info("Turning on the Laifen device...")
+        return await self.send_command(bytes.fromhex("AA0F010101A4"))  # Example command for turning on
+
+    async def turn_off(self):
+        """Turns the Laifen device off."""
+        _LOGGER.info("Turning off the Laifen device...")
+        return await self.send_command(bytes.fromhex("AA0F010100A3"))  # Example command for turning off
+
     async def gatherdata(self):
         async with self.lock:
             _LOGGER.warning("Gathering data...")
@@ -94,10 +120,6 @@ class Laifen:
                     _LOGGER.warning("Notifications are already enabled, skipping")
                     return
                 _LOGGER.error(f"Failed to start notifications (attempt {attempt+1}/{attempts}): {e}")
-                if "No backend with an available connection slot" in str(e):
-                    _LOGGER.error("No available connection slot. Retrying...")
-                if attempt == attempts - 1:
-                    raise
                 await asyncio.sleep(1)  # Wait a bit before retrying
 
     async def stop_notifications(self):
@@ -131,89 +153,48 @@ class Laifen:
             return {
                 "raw_data": "",
                 "status": None,
-                "vibration_strength_mode_1": None,
-                "oscillation_range_mode_1": None,
-                "oscillation_speed_mode_1": None,
-                "vibration_strength_mode_2": None,
-                "oscillation_range_mode_2": None,
-                "oscillation_speed_mode_2": None,
-                "vibration_strength_mode_3": None,
-                "oscillation_range_mode_3": None,
-                "oscillation_speed_mode_3": None,
-                "vibration_strength_mode_4": None,
-                "oscillation_range_mode_4": None,
-                "oscillation_speed_mode_4": None,
+                "vibration_strength": None,
+                "oscillation_range": None,
+                "oscillation_speed": None,
                 "mode": None,
                 "battery_level": None,
                 "brushing_timer": None,
                 "timer": None,
             }
-
+    
         data_str = data.hex()
-        if len(data_str) < 32:  # Ensure the string is long enough
-            _LOGGER.error("Data string is too short")
+        if len(data_str) != 52:  # Ensure the string is exactly 52 characters long
+            _LOGGER.error(f"Invalid data length: {len(data_str)}. Expected 52 characters.")
             return {
                 "raw_data": data_str,
                 "status": None,
-                "vibration_strength_mode_1": None,
-                "oscillation_range_mode_1": None,
-                "oscillation_speed_mode_1": None,
-                "vibration_strength_mode_2": None,
-                "oscillation_range_mode_2": None,
-                "oscillation_speed_mode_2": None,
-                "vibration_strength_mode_3": None,
-                "oscillation_range_mode_3": None,
-                "oscillation_speed_mode_3": None,
-                "vibration_strength_mode_4": None,
-                "oscillation_range_mode_4": None,
-                "oscillation_speed_mode_4": None,
+                "vibration_strength": None,
+                "oscillation_range": None,
+                "oscillation_speed": None,
                 "mode": None,
                 "battery_level": None,
                 "brushing_timer": None,
                 "timer": None,
             }
-
+    
         # Parse the data string
         status = "Running" if data_str[47] == "1" else "Idle"  # Byte 47 for status
         mode = str(int(data_str[9], 16) + 1)  # Byte 9 for mode (add 1 for human-readable mode)
-        battery_level = int(data_str[36:38], 16)  # Bytes 35-36 for battery percentage
-        brushing_timer = int(data_str[40:44], 16)  # Bytes 35-36 for battery percentage
-
-        # Mode 1
-        vibration_strength_mode_1 = int(data_str[10:12], 16)  # Bytes 10-11 (hex to decimal)
-        oscillation_range_mode_1 = int(data_str[12:14], 16)  # Bytes 12-13 (hex to decimal)
-        oscillation_speed_mode_1 = int(data_str[14:16], 16)  # Bytes 14-15 (hex to decimal)
-
-        # Mode 2
-        vibration_strength_mode_2 = int(data_str[16:18], 16)  # Bytes 16-17 (hex to decimal)
-        oscillation_range_mode_2 = int(data_str[18:20], 16)  # Bytes 18-19 (hex to decimal)
-        oscillation_speed_mode_2 = int(data_str[20:22], 16)  # Bytes 20-21 (hex to decimal)
-
-        # Mode 3
-        vibration_strength_mode_3 = int(data_str[22:24], 16)  # Bytes 22-23 (hex to decimal)
-        oscillation_range_mode_3 = int(data_str[24:26], 16)  # Bytes 24-25 (hex to decimal)
-        oscillation_speed_mode_3 = int(data_str[26:28], 16)  # Bytes 26-27 (hex to decimal)
-
-        # Mode 4
-        vibration_strength_mode_4 = int(data_str[28:30], 16)  # Bytes 28-29 (hex to decimal)
-        oscillation_range_mode_4 = int(data_str[30:32], 16)  # Bytes 30-31 (hex to decimal)
-        oscillation_speed_mode_4 = int(data_str[32:34], 16)  # Bytes 32-33 (hex to decimal)
-
+        battery_level = int(data_str[36:38], 16)  # Bytes 36-37 for battery level (hex to decimal)
+        brushing_timer = int(data_str[40:44], 16)  # Bytes 40-43 for brushing timer (hex to decimal)
+    
+        # Extract values for the current mode
+        mode_index = int(data_str[9], 16)  # Byte 9 for mode index (0-based)
+        vibration_strength = int(data_str[10 + (mode_index * 6):12 + (mode_index * 6)], 16)  # Vibration strength for current mode
+        oscillation_range = int(data_str[12 + (mode_index * 6):14 + (mode_index * 6)], 16)  # Oscillation range for current mode
+        oscillation_speed = int(data_str[14 + (mode_index * 6):16 + (mode_index * 6)], 16)  # Oscillation speed for current mode
+    
         return {
             "raw_data": data_str,
             "status": status,
-            "vibration_strength_mode_1": vibration_strength_mode_1,
-            "oscillation_range_mode_1": oscillation_range_mode_1,
-            "oscillation_speed_mode_1": oscillation_speed_mode_1,
-            "vibration_strength_mode_2": vibration_strength_mode_2,
-            "oscillation_range_mode_2": oscillation_range_mode_2,
-            "oscillation_speed_mode_2": oscillation_speed_mode_2,
-            "vibration_strength_mode_3": vibration_strength_mode_3,
-            "oscillation_range_mode_3": oscillation_range_mode_3,
-            "oscillation_speed_mode_3": oscillation_speed_mode_3,
-            "vibration_strength_mode_4": vibration_strength_mode_4,
-            "oscillation_range_mode_4": oscillation_range_mode_4,
-            "oscillation_speed_mode_4": oscillation_speed_mode_4,
+            "vibration_strength": vibration_strength,
+            "oscillation_range": oscillation_range,
+            "oscillation_speed": oscillation_speed,
             "mode": mode,
             "battery_level": battery_level,
             "brushing_timer": brushing_timer,
