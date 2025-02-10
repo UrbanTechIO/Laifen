@@ -158,7 +158,7 @@ class Laifen:
                 "oscillation_speed": None,
                 "mode": None,
                 "battery_level": None,
-                "brushing_timer": None,
+                "brushing_time": None,
                 "timer": None,
             }
     
@@ -173,7 +173,7 @@ class Laifen:
                 "oscillation_speed": None,
                 "mode": None,
                 "battery_level": None,
-                "brushing_timer": None,
+                "brushing_time": None,
                 "timer": None,
             }
     
@@ -181,7 +181,7 @@ class Laifen:
         status = "Running" if data_str[47] == "1" else "Idle"  # Byte 47 for status
         mode = str(int(data_str[9], 16) + 1)  # Byte 9 for mode (add 1 for human-readable mode)
         battery_level = int(data_str[36:38], 16)  # Bytes 36-37 for battery level (hex to decimal)
-        brushing_timer = int(data_str[40:44], 16)  # Bytes 40-43 for brushing timer (hex to decimal)
+        brushing_time = int(data_str[40:44], 16) / 60  # Convert seconds to minutes, Bytes 40-43 for brushing timer (hex to decimal)
     
         # Extract values for the current mode
         mode_index = int(data_str[9], 16)  # Byte 9 for mode index (0-based)
@@ -197,7 +197,7 @@ class Laifen:
             "oscillation_speed": oscillation_speed,
             "mode": mode,
             "battery_level": battery_level,
-            "brushing_timer": brushing_timer,
+            "brushing_time": brushing_time,
             "timer": status,  # Timer is derived from status in this example
         }
 
