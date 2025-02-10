@@ -76,11 +76,12 @@ SENSORS = (
         icon="mdi:battery",
         device_class=SensorDeviceClass.BATTERY,
         state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement="%",  # Add this line to fix the unit issue
     ),
     LaifenSensorEntityDescription(
-        key="brushing_timer",
-        name="Brushing Timer",
-        unique_id="laifen_brushing_timer",
+        key="brushing_time",
+        name="Brushing Time",
+        unique_id="laifen_brushing_time",
         icon="mdi:timer",
     ),
 )
@@ -163,6 +164,14 @@ class LaifenSensor(CoordinatorEntity, SensorEntity):
         elif key == "battery_level":
             value = self.device.result.get("battery_level")
             self._last_valid_value = value  # Cache the last valid value
+
+        elif key == "brushing_time":
+            value = self.device.result.get("brushing_time")
+            if value is not None:
+                value = round(float(value), 1)  # Keep 1 decimal place for clarity
+                self._last_valid_value = f"{value} min"
+        elif key == "timer":
+            self._last_valid_value = self._timer_state
         return self._last_valid_value
 
     async def async_added_to_hass(self):

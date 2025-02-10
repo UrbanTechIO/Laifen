@@ -81,7 +81,7 @@ class Laifen:
     async def turn_off(self):
         """Turns the Laifen device off."""
         _LOGGER.info("Turning off the Laifen device...")
-        return await self.send_command(bytes.fromhex("AA0F010100A3"))  # Example command for turning off
+        return await self.send_command(bytes.fromhex("AA0F010100A5"))  # Example command for turning off
 
     async def gatherdata(self):
         async with self.lock:
@@ -134,18 +134,22 @@ class Laifen:
 
     def notification_handler(self, sender, data):
         _LOGGER.warning(f"Notification received from {sender}: {data}")
-        if self._first_message:
-            _LOGGER.warning("Ignoring first message (subscription confirmation)")
-            self._first_message = False
+    
+        # Convert data to hex string
+        data_str = data.hex()
+        
+        # Check if the data starts with 'AA0A0215' and is exactly 52 characters long
+        if not data_str.startswith("aa0a0215") or len(data_str) != 52:
+            _LOGGER.warning(f"Ignoring invalid data: {data_str} (length: {len(data_str)}). Expected 52 characters starting with 'aa0a0215'.")
             return
-
+    
+        # Proceed with parsing valid data
         parsed_result = self.parse_data(data)
-        if not parsed_result["raw_data"].startswith("01020304050607"):
-            self.result = parsed_result
-            _LOGGER.warning(f"Parsed result: {self.result}")
-            self.coordinator.async_handle_notification(self.result)  # Update coordinator
-        else:
-            _LOGGER.warning("Ignoring invalid data")
+        
+        # If valid data, update result and pass it to the coordinator
+        self.result = parsed_result
+        _LOGGER.warning(f"Parsed result: {self.result}")
+        self.coordinator.async_handle_notification(self.result)  # Update coordinator
 
     def parse_data(self, data):
         if data is None:
@@ -158,13 +162,26 @@ class Laifen:
                 "oscillation_speed": None,
                 "mode": None,
                 "battery_level": None,
-                "brushing_timer": None,
+                "brushing_time": None,
                 "timer": None,
             }
     
         data_str = data.hex()
-        if len(data_str) != 52:  # Ensure the string is exactly 52 characters long
-            _LOGGER.error(f"Invalid data length: {len(data_str)}. Expected 52 characters.")
+        
+        # Continue parsing if the data is valid (already filtered outside this function)
+        try:
+            status = "Running" if data_str[47] == "1" else "Idle"  # Byte 47 for status
+            mode = str(int(data_str[9], 16) + 1)  # Byte 9 for mode (add 1 for human-readable mode)
+            battery_level = int(data_str[36:38], 16)  # Bytes 36-37 for battery level (hex to decimal)
+            brushing_time = int(data_str[40:44], 16) / 60  # Convert seconds to minutes, Bytes 40-43 for brushing timer (hex to decimal)
+    
+            # Extract values for the current mode
+            mode_index = int(data_str[9], 16)  # Byte 9 for mode index (0-based)
+            vibration_strength = int(data_str[10 + (mode_index * 6):12 + (mode_index * 6)], 16)  # Vibration strength for current mode
+            oscillation_range = int(data_str[12 + (mode_index * 6):14 + (mode_index * 6)], 16)  # Oscillation range for current mode
+            oscillation_speed = int(data_str[14 + (mode_index * 6):16 + (mode_index * 6)], 16)  # Oscillation speed for current mode
+        except Exception as e:
+            _LOGGER.error(f"Error parsing data: {e}")
             return {
                 "raw_data": data_str,
                 "status": None,
@@ -173,21 +190,9 @@ class Laifen:
                 "oscillation_speed": None,
                 "mode": None,
                 "battery_level": None,
-                "brushing_timer": None,
+                "brushing_time": None,
                 "timer": None,
             }
-    
-        # Parse the data string
-        status = "Running" if data_str[47] == "1" else "Idle"  # Byte 47 for status
-        mode = str(int(data_str[9], 16) + 1)  # Byte 9 for mode (add 1 for human-readable mode)
-        battery_level = int(data_str[36:38], 16)  # Bytes 36-37 for battery level (hex to decimal)
-        brushing_timer = int(data_str[40:44], 16)  # Bytes 40-43 for brushing timer (hex to decimal)
-    
-        # Extract values for the current mode
-        mode_index = int(data_str[9], 16)  # Byte 9 for mode index (0-based)
-        vibration_strength = int(data_str[10 + (mode_index * 6):12 + (mode_index * 6)], 16)  # Vibration strength for current mode
-        oscillation_range = int(data_str[12 + (mode_index * 6):14 + (mode_index * 6)], 16)  # Oscillation range for current mode
-        oscillation_speed = int(data_str[14 + (mode_index * 6):16 + (mode_index * 6)], 16)  # Oscillation speed for current mode
     
         return {
             "raw_data": data_str,
@@ -197,9 +202,10 @@ class Laifen:
             "oscillation_speed": oscillation_speed,
             "mode": mode,
             "battery_level": battery_level,
-            "brushing_timer": brushing_timer,
+            "brushing_time": brushing_time,
             "timer": status,  # Timer is derived from status in this example
         }
+
 
     async def set_ble_device(self, ble_device):
         _LOGGER.warning(f"Setting BLE device: {ble_device}")
