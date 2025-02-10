@@ -76,6 +76,7 @@ SENSORS = (
         icon="mdi:battery",
         device_class=SensorDeviceClass.BATTERY,
         state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement="%",  # Add this line to fix the unit issue
     ),
     LaifenSensorEntityDescription(
         key="brushing_time",
