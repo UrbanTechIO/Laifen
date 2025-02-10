@@ -84,6 +84,12 @@ SENSORS = (
         unique_id="laifen_brushing_time",
         icon="mdi:timer",
     ),
+    LaifenSensorEntityDescription(
+        key="timer",
+        name="Timer",
+        unique_id="laifen_timer",
+        icon="mdi:timer",
+    ),
 )
 
 
