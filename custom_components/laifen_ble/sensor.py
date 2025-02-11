@@ -196,7 +196,18 @@ class LaifenSensor(CoordinatorEntity, SensorEntity):
             elif status == "Idle" and self._timer_task is not None:
                 self._timer_task.cancel()
                 self._timer_task = None
-                self._timer_state = 0
+                await self._reset_timer_after_delay()
+
+    async def _reset_timer_after_delay(self):
+        """Reset the timer after a delay, but only if status remains 'Idle'."""
+        try:
+            for _ in range(60):  # Check every second for 10 seconds
+                await asyncio.sleep(1)
+                if self.device.result.get("status") == "Running":
+                    return  # Exit if status changes back to Running
+            self._timer_state = 0  # Reset the timer after 10 seconds of being Idle
+        except asyncio.CancelledError:
+            pass
 
     async def _run_timer(self):
         """Run the timer."""
