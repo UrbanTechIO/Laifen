@@ -137,9 +137,7 @@ class LaifenSensor(CoordinatorEntity, SensorEntity, RestoreEntity):
             sw_version="1.0.0",
         )
 
-        self._attr_unique_id = (
-            f"{self.device.ble_device.address}_{description.unique_id}"
-        )
+        self._attr_unique_id = f"{self.device.ble_device.address}_{description.unique_id}"
 
     @property
     def native_value(self) -> str | None:
