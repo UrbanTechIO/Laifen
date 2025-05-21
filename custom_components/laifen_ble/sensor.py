@@ -24,19 +24,18 @@ from homeassistant.helpers.update_coordinator import (
 )
 from homeassistant.helpers.event import async_track_time_interval
 
-from .const import DOMAIN
+from .const import DOMAIN, UPDATE_SECONDS
 from .laifen import Laifen
+from .models import LaifenData 
+
 
 _LOGGER = logging.getLogger(__name__)
-SCAN_INTERVAL = timedelta(seconds=1)  # Set scan interval to 1 second
-
+SCAN_INTERVAL = timedelta(seconds=1)
 
 @dataclass
 class LaifenSensorEntityDescription(SensorEntityDescription):
     """Provide a description of a Laifen sensor."""
-
     unique_id: str | None = None
-
 
 SENSORS = (
     LaifenSensorEntityDescription(
@@ -76,7 +75,7 @@ SENSORS = (
         icon="mdi:battery",
         device_class=SensorDeviceClass.BATTERY,
         state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement="%",  # Add this line to fix the unit issue
+        native_unit_of_measurement="%",
     ),
     LaifenSensorEntityDescription(
         key="brushing_time",
@@ -92,21 +91,33 @@ SENSORS = (
     ),
 )
 
+async def async_setup_entry(hass: HomeAssistant, entry: config_entries.ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
+    """Set up the sensor platform for multiple devices."""
+    if DOMAIN not in hass.data:
+        _LOGGER.warning("Laifen domain not initialized, delaying setup...")
+        await asyncio.sleep(3)
 
-async def async_setup_entry(
-    hass: HomeAssistant,
-    entry: config_entries.ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
-) -> None:
-    """Set up the sensor platform."""
-    data = hass.data[DOMAIN][entry.entry_id]
-    coordinator = LaifenDataUpdateCoordinator(hass, data.device)
-    await coordinator.async_config_entry_first_refresh()
-    _LOGGER.warning("Adding Laifen sensor entities")
-    async_add_entities(
-        LaifenSensor(data.coordinator, data.device, description)
-        for description in SENSORS
-    )
+    devices = hass.data.get(DOMAIN, {}).get(entry.entry_id, {}).values()
+    if not devices:
+        _LOGGER.error(f"No Laifen devices registered under entry {entry.entry_id}. Aborting sensor setup.")
+        return
+
+    _LOGGER.warning("Setting up Laifen sensor entities")
+    entities = []
+
+    for device_entry in devices:
+        if isinstance(device_entry, LaifenData):  # ✅ Ensure correct object type
+            device = device_entry.device  # ✅ Retrieve actual Laifen instance
+        else:
+            _LOGGER.warning(f"Unexpected object type in hass.data: {device_entry}. Skipping...")
+            continue  # ✅ Prevents setup issues from malformed data
+
+        coordinator = device.coordinator  # ✅ Ensure coordinator is correctly assigned
+
+        for description in SENSORS:  # ✅ Loop through sensor descriptions for each device
+            entities.append(LaifenSensor(coordinator, device, description, unique_id=f"{device.ble_device.address}_{description.unique_id}"))
+
+    async_add_entities(entities)  # ✅ Register entities properly
 
 
 class LaifenSensor(CoordinatorEntity, SensorEntity):
@@ -114,18 +125,18 @@ class LaifenSensor(CoordinatorEntity, SensorEntity):
 
     _attr_has_entity_name = True
 
-    def __init__(self, coordinator, device, description):
+    def __init__(self, coordinator, device, description, unique_id):
         """Initialize the sensor."""
         super().__init__(coordinator)
         self.entity_description = description
         self.device = device
-        self._last_valid_value = None  # Store the last valid value
-        self._timer_state = 0  # Initialize the timer state
-        self._timer_task = None  # Initialize the timer task
-        self._update_interval = SCAN_INTERVAL  # Store the update interval
-        self._update_listener = None  # Initialize the update listener
+        self._last_valid_value = None
+        self._timer_state = 0
+        self._timer_task = None
+        self._update_interval = SCAN_INTERVAL
+        self._update_listener = None
+        self._attr_unique_id = unique_id
 
-        # Set device class and state class if defined in the description
         if hasattr(description, "device_class"):
             self._attr_device_class = description.device_class
         if hasattr(description, "state_class"):
@@ -139,104 +150,102 @@ class LaifenSensor(CoordinatorEntity, SensorEntity):
             sw_version="1.0.0",
         )
 
-        self._attr_unique_id = (
-            f"{self.device.ble_device.address}_{description.unique_id}"
-        )
-
     @property
     def native_value(self) -> str | None:
-        """Return sensor state."""
-        if self.device.result is None:
-            return self._last_valid_value  # Return the last valid value
-
+        """Return sensor state, ensuring last known values remain when the device disconnects."""
         key = self.entity_description.key
-        if key == "status":
-            value = self.device.result.get("status")
-            self._last_valid_value = value  # Cache the last valid value
-        elif key == "vibration_strength":
-            value = self.device.result.get("vibration_strength")
-            self._last_valid_value = value  # Cache the last valid value
-        elif key == "oscillation_range":
-            value = self.device.result.get("oscillation_range")
-            self._last_valid_value = value  # Cache the last valid value
-        elif key == "oscillation_speed":
-            value = self.device.result.get("oscillation_speed")
-            self._last_valid_value = value  # Cache the last valid value
-        elif key == "mode":
-            value = self.device.result.get("mode")
-            self._last_valid_value = value  # Cache the last valid value
-        elif key == "battery_level":
-            value = self.device.result.get("battery_level")
-            self._last_valid_value = value  # Cache the last valid value
+
+        # ✅ If device is disconnected, hold last valid value instead of allowing "Unavailable"
+        if self.device.result is None:
+            _LOGGER.warning(f"{self.entity_id} disconnected. Holding last known value: {self._last_valid_value}")
+            return self._last_valid_value  # ✅ Forces last value instead of "Unavailable"
+
+        # ✅ Retrieve latest sensor value
+        value = self.device.result.get(key)
+
+        # ✅ Explicitly store previous values per sensor type
+        if key in ["status", "vibration_strength", "oscillation_range", "oscillation_speed", "mode", "battery_level"]:
+            self._last_valid_value = value  # ✅ Keep valid data before disconnect
         elif key == "brushing_time":
-            value = self.device.result.get("brushing_time")
             if value is not None:
-                value = round(float(value), 1)  # Keep 1 decimal place for clarity
+                value = round(float(value), 1)  # ✅ Keep 1 decimal place
                 self._last_valid_value = f"{value} min"
         elif key == "timer":
-            self._last_valid_value = self._timer_state
-        return self._last_valid_value
+            value = self._timer_state
+            _LOGGER.warning(f"Timer Value is {value}")
+            self._last_valid_value = value
+
+        # ✅ Prevent returning `None` if no new data is available
+        self._last_valid_value = value if value is not None else self._last_valid_value
+        
+        _LOGGER.warning(f"{self.entity_id} holding last known value: {self._last_valid_value}")
+        return self._last_valid_value  # ✅ Forces retention of valid values
+
 
     async def async_added_to_hass(self):
-        """When entity is added to hass."""
+        """Restore last known value after HA restart."""
         await super().async_added_to_hass()
-        _LOGGER.warning("Setting up listener for coordinator updates")
+        if (last_state := self.hass.states.get(self.entity_id)) is not None:
+            _LOGGER.warning(f"Restoring last known state for {self.entity_id}: {last_state.state}")
+            self._last_valid_value = last_state.state  # ✅ Restore previous sensor value
+            self.async_write_ha_state()
+
+        
+        if not self.device.client.is_connected:
+            _LOGGER.warning(f"Delaying state updates for {self.device.ble_device.address} until connection stabilizes.")
+            await asyncio.sleep(2)  # ✅ Small delay before coordinator starts listening
+
         self.async_on_remove(self.coordinator.async_add_listener(self.async_write_ha_state))
         self._update_listener = async_track_time_interval(self.hass, self.async_update, self._update_interval)
-        asyncio.create_task(self.device.check_connection())  # Start the connection check task
+        if self.device.has_connected_before:  # ✅ Ensures it's only called after device was online before
+            _LOGGER.warning(f"Device {self.device.ble_device.address} has previously been connected—checking status.")
+            asyncio.create_task(self.device.check_connection())
+        else:
+            _LOGGER.warning(f"Skipping connection check for {self.device.ble_device.address}—first-time setup detected.")
+
 
     async def async_update(self, *args):
         """Update the sensor state."""
         await self.coordinator.async_request_refresh()
         if self.device.result is not None:
             status = self.device.result.get("status")
-            if status == "Running" and self._timer_task is None:
-                # self._timer_state = self.device.result.get("brushing_timer")
-                self._timer_task = asyncio.create_task(self._run_timer())
-            elif status == "Idle" and self._timer_task is not None:
-                self._timer_task.cancel()
-                self._timer_task = None
-                await self._reset_timer_after_delay()
+            if status == "Running" :
+                if self._timer_task is None:
+                    _LOGGER.warning(f"Starting Timer")
+                    self._timer_task = asyncio.create_task(self._run_timer())
+            elif status == "Idle":
+                if self._timer_task is not None:
+                    _LOGGER.warning(f"Stopping Timer - Holding Value for 60 seconds")
+                    self._timer_task.cancel()
+                    self._timer_task = None
+                    asyncio.create_task(self._hold_timer())
 
-    async def _reset_timer_after_delay(self):
-        """Reset the timer after a delay, but only if status remains 'Idle'."""
+    async def _hold_timer(self):
+        """Hold timer value for 60 seconds before resetting to 0."""
         try:
-            for _ in range(60):  # Check every second for 10 seconds
+            for _ in range(60):
                 await asyncio.sleep(1)
                 if self.device.result.get("status") == "Running":
-                    return  # Exit if status changes back to Running
-            self._timer_state = 0  # Reset the timer after 10 seconds of being Idle
+                    _LOGGER.warning("Status changed back to Running - Holding timer value.")
+                    return
+            _LOGGER.warning("Timer Held for 60 seconds - Resetting to 0.")
+            self._timer_state = 0
+            self.async_write_ha_state()
         except asyncio.CancelledError:
             pass
 
     async def _run_timer(self):
-        """Run the timer."""
+        """Increment brushing timer every second while running."""
         try:
             while True:
+                if self.device.result.get("status") == "Idle":
+                    _LOGGER.warning("Status changed to Idle - Stopping Timer.")
+                    return  # ✅ Exit loop when Idle
+                
                 self._timer_state += 1
-                self.async_write_ha_state()  # Update the state in Home Assistant
-                await asyncio.sleep(1)  # Add a 1-second delay
+                _LOGGER.warning(f"Timer Value Updated: {self._timer_state}")
+                self.async_write_ha_state()
+                await asyncio.sleep(1)
         except asyncio.CancelledError:
-            pass
+            _LOGGER.warning("Timer task was cancelled.")
 
-
-class LaifenDataUpdateCoordinator(DataUpdateCoordinator):
-    """Class to manage fetching Laifen data."""
-
-    def __init__(self, hass: HomeAssistant, laifen: Laifen):
-        """Initialize."""
-        self.laifen = laifen
-        super().__init__(
-            hass,
-            _LOGGER,
-            name="Laifen",
-            update_interval=SCAN_INTERVAL,
-        )
-
-    async def _async_update_data(self):
-        """Update data via library."""
-        try:
-            await self.laifen.gatherdata()
-            return self.laifen.result
-        except Exception as err:
-            raise UpdateFailed(f"Error communicating with Laifen API: {err}")
