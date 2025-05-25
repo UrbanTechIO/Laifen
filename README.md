@@ -16,4 +16,4 @@ It will provide the following sensors:
 It will provide the following switches:
 - Power control
 
-The Integration will scan for a Laifen device around therefore the Laifen Wave needs to be awaken during this process
+The Integration will scan for a available Laifen devices around therefore the Laifen Wave needs to be awaken during this process
