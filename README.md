@@ -17,5 +17,3 @@ It will provide the following switches:
 - Power control
 
 The Integration will scan for a Laifen device around therefore the Laifen Wave needs to be awaken during this process
-
-I welcome any help improving BLE communication
