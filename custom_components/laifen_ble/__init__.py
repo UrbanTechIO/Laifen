@@ -51,14 +51,14 @@ class LaifenCoordinator(DataUpdateCoordinator):
             await self.laifen.check_connection()
             await self.laifen.gatherdata()
             if not self.laifen.result:
-                _LOGGER.warning("No valid result from Laifen. Assuming device is idle or sleeping. Keeping last known values.")
+                # _LOGGER.warning("No valid result from Laifen. Assuming device is idle or sleeping. Keeping last known values.")
                 raise UpdateFailed("Device is sleeping — do not wipe data")
             
             await self._async_store_data(self.laifen.result)  # <- Save fresh state
             return self.laifen.result
         except BleakError as e:
             if any(term in str(e) for term in ["Characteristic", "not found", "disconnected", "sleep", "timed out"]):
-                _LOGGER.warning(f"Device likely asleep: {e}. Holding last known state.")
+                # _LOGGER.warning(f"Device likely asleep: {e}. Holding last known state.")
                 # Do NOT raise UpdateFailed — coordinator holds last data
                 cached = await self._async_restore_data()
                 return cached or {}
@@ -85,7 +85,7 @@ class LaifenCoordinator(DataUpdateCoordinator):
                 await self.async_refresh()
                 break
             except UpdateFailed:
-                _LOGGER.warning("Device not reachable, retrying in 30 seconds...")
+                # _LOGGER.warning("Device not reachable, retrying in 30 seconds...")
                 await asyncio.sleep(30)
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -98,7 +98,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     addresses = entry.data.get("devices", []) or list(stored_devices.keys())
 
     if not addresses:
-        _LOGGER.warning("No Laifen devices found. Setup aborted until a device is added.")
+        # _LOGGER.warning("No Laifen devices found. Setup aborted until a device is added.")
         raise ConfigEntryNotReady  
 
     ble_devices = []
@@ -123,9 +123,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             if isinstance(stored_data, LaifenData):
                 laifen = stored_data.device
                 coordinator = stored_data.coordinator
-                _LOGGER.warning(f"Restored Laifen {addr} from previous data.")
+                # _LOGGER.warning(f"Restored Laifen {addr} from previous data.")
             else:
-                _LOGGER.error(f"Invalid stored object for {addr}, skipping...")
+                # _LOGGER.error(f"Invalid stored object for {addr}, skipping...")
                 continue
         else:
             # First-time setup for this device
@@ -142,7 +142,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
             async_dispatcher_send(hass, f"{DEVICE_SIGNAL}_{entry.entry_id}_{addr}")
 
-            _LOGGER.warning(f"Initialized new Laifen {addr}.")
+            # _LOGGER.warning(f"Initialized new Laifen {addr}.")
 
         laifens.append(laifen)
 
@@ -156,7 +156,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await laifen.start_notifications()
             await coordinator.async_request_refresh()
         elif restored:
-            _LOGGER.warning(f"Device {addr} is sleeping. Restoring last known values.")
+            # _LOGGER.warning(f"Device {addr} is sleeping. Restoring last known values.")
             coordinator.data = restored  # ✅ preload cached values
             coordinator.async_set_updated_data(restored)  # ✅ notify entities
 
@@ -203,7 +203,7 @@ async def _async_stop(hass: HomeAssistant, event: Event) -> None:
         await laifen.stop_notifications()  
         await laifen.disconnect()
 
-    _LOGGER.warning("Laifen devices successfully disconnected.")
+    # _LOGGER.warning("Laifen devices successfully disconnected.")
 
 async def _async_update_ble(hass: HomeAssistant, entry: ConfigEntry, service_info, change):
     """Update BLE data."""
@@ -217,77 +217,34 @@ async def _async_device_recovery( hass: HomeAssistant, entry: ConfigEntry, servi
     """Recover Laifen devices when they wake up via passive Bluetooth events."""
 
     device_address = service_info.device.address
-    _LOGGER.debug(f"Bluetooth recovery callback fired for {device_address}")
+    # _LOGGER.debug(f"Bluetooth recovery callback fired for {device_address}")
 
     entry_devices: dict[str, LaifenData] = hass.data[DOMAIN][entry.entry_id]
 
     if device_address in entry_devices:
-        _LOGGER.warning(f"Laifen {device_address} detected via Bluetooth callback! Restoring connection...")
+        # _LOGGER.warning(f"Laifen {device_address} detected via Bluetooth callback! Restoring connection...")
 
         laifen_data = entry_devices.get(device_address)
         if not isinstance(laifen_data, LaifenData):
-            _LOGGER.warning(f"Device {device_address} is stored incorrectly. Expected LaifenData but got {type(laifen_data)}.")
+            # _LOGGER.warning(f"Device {device_address} is stored incorrectly. Expected LaifenData but got {type(laifen_data)}.")
             return
 
         laifen = laifen_data.device
         laifen.coordinator = laifen_data.coordinator  # ✅ ensure linked
 
         if laifen.client.is_connected:
-            _LOGGER.warning(f"{device_address} is already connected. Skipping recovery.")
+            # _LOGGER.warning(f"{device_address} is already connected. Skipping recovery.")
             return
 
         if await laifen.connect():
             await laifen.start_notifications()
             await laifen.coordinator.async_request_refresh()
-            _LOGGER.warning(f"Successfully reconnected to {device_address}.")
+            # _LOGGER.warning(f"Successfully reconnected to {device_address}.")
         else:
             _LOGGER.warning(f"Failed to reconnect {device_address}. Retrying on next callback event.")
     else:
         # ✅ Do not register new devices here
         _LOGGER.warning(f"Laifen {device_address} detected but not found in registered devices. Skipping recovery.")
-
-    # entry_devices = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
-    # if not isinstance(entry_devices, dict):
-    #     _LOGGER.error(f"Device container is not a dict: {type(entry_devices)}. Cannot proceed with recovery.")
-    #     return
-
-    # if device_address in entry_devices:
-    #     _LOGGER.warning(f"Laifen {device_address} detected via Bluetooth callback! Restoring connection...")
-
-    #     laifen_data = entry_devices.get(device_address)
-    #     if not isinstance(laifen_data, LaifenData):
-    #         _LOGGER.warning(f"Device {device_address} is stored incorrectly. Expected LaifenData but got {type(laifen_data)}.")
-    #         return
-
-    #     laifen = laifen_data.device
-    #     laifen.coordinator = laifen_data.coordinator
-
-    #     if laifen.client.is_connected:
-    #         _LOGGER.warning(f"{device_address} is already connected. Skipping recovery.")
-    #         return
-
-    #     if await laifen.connect():
-    #         await laifen.start_notifications()
-    #         await laifen.coordinator.async_request_refresh()
-    #         _LOGGER.warning(f"Successfully reconnected to {device_address}.")
-    #     else:
-    #         _LOGGER.warning(f"Failed to reconnect {device_address}. Retrying on next callback event.")
-    # else:
-    #     _LOGGER.warning(f"Laifen {device_address} detected but not found in registered devices. Assuming it's a new device.")
-
-
-    #     # The rest of your existing "restore" logic stays here — coordinator, Laifen, connect, store, etc.
-
-    #     # ✅ Dynamically register the toothbrush when detected for the first time
-    #     new_coordinator = LaifenCoordinator(hass, None)
-    #     new_laifen = Laifen(service_info.device, new_coordinator)
-    #     new_coordinator.laifen = new_laifen  
-    #     hass.data[DOMAIN][entry.entry_id][device_address] = LaifenData(entry.title, new_laifen, new_coordinator)
-
-    #     if await new_laifen.connect():
-    #         await new_laifen.start_notifications()
-    #         # await new_laifen.gatherdata()
-    #         _LOGGER.warning(f"Newly detected Laifen device {device_address} successfully restored.")
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
@@ -309,7 +266,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             try:
                 await data.device.stop_notifications()
                 await data.device.disconnect()
-                _LOGGER.debug(f"Disconnected Laifen device {addr}")
+                # _LOGGER.debug(f"Disconnected Laifen device {addr}")
             except Exception as e:
                 _LOGGER.warning(f"Error disconnecting {addr}: {e}")
 

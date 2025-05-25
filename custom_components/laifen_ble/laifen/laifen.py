@@ -1,10 +1,8 @@
 import logging
 import asyncio
-import async_timeout
 import json
 import os
 from bleak import BleakError, BleakClient, BleakScanner
-# from .state_cache import save_device_state
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -21,19 +19,18 @@ class Laifen:
         self.name = ble_device.name or "Laifen"
         self.client = BleakClient(ble_device)
         self.coordinator = coordinator
-        # self.result = None
         self.lock = asyncio.Lock()  # Ensure concurrency safety
         self._first_message = True  # Ignore initial unwanted message
         _LOGGER.warning(f"Laifen instance created for {self.ble_device.address}")
 
     async def scan_for_devices(self):
         """Scan for Laifen toothbrush devices."""
-        _LOGGER.warning("Scanning for devices...")
+        # _LOGGER.warning("Scanning for devices...")
         scanner = BleakScanner()
         devices = await scanner.discover()
         found_devices = [device for device in devices if device.name and device.name.startswith("LFTB")]
         if not found_devices:
-            _LOGGER.warning("No Laifen devices found during scan.")
+            # _LOGGER.warning("No Laifen devices found during scan.")
             return None
         _LOGGER.warning(f"Found Laifen devices: {[device.address for device in found_devices]}")
         return found_devices
@@ -44,9 +41,6 @@ class Laifen:
         if self.client.is_connected:
             self.has_connected_before = True
             return True
-        #     _LOGGER.warning(f"{self.ble_device.address} appears stuck in a connected state. Disconnecting first...")
-        #     await self.client.disconnect()
-        #     await asyncio.sleep(2)  # ✅ Small delay before retrying connection
 
         for attempt in range(RETRY_LIMIT):
             try:
@@ -93,7 +87,7 @@ class Laifen:
         _LOGGER.debug(f"Gathering data from {self.ble_device.address}...")
 
         if not self.client or not self.client.is_connected:
-            _LOGGER.warning(f"[gatherdata] Not connected to {self.ble_device.address}")
+            # _LOGGER.warning(f"[gatherdata] Not connected to {self.ble_device.address}")
             return
 
         try:
@@ -169,7 +163,7 @@ class Laifen:
         self.result = parsed_result
         _LOGGER.warning(f"Parsed result: {self.result}")
         self.coordinator.async_set_updated_data(self.result)
-        # self.coordinator.async_handle_notification(self.result)
+
 
     def parse_data(self, data):
         """Parse BLE data into structured sensor attributes."""
@@ -187,7 +181,7 @@ class Laifen:
             }
 
         data_str = data.hex()
-        # parsed_result = {}
+
 
         try:
             return { 
@@ -200,9 +194,6 @@ class Laifen:
                 "oscillation_range": int(data_str[12 + (int(data_str[9], 16) * 6):14 + (int(data_str[9], 16) * 6)], 16),
                 "oscillation_speed": int(data_str[14 + (int(data_str[9], 16) * 6):16 + (int(data_str[9], 16) * 6)], 16),
             }
-        # except IndexError:
-        #     _LOGGER.error(f"Error parsing data: Index out of range. Data received: {data_str}")
-        #     return {key: 0 if key != "raw_data" else data_str for key in ["raw_data", "status", "mode", "battery_level", "brushing_time", "vibration_strength", "oscillation_range", "oscillation_speed"]}
 
         except Exception as e:
             _LOGGER.error(f"Unexpected error while parsing data: {e}")
@@ -225,20 +216,16 @@ class Laifen:
     async def check_connection(self):
         """Ensure continuous connection after sleep or sudden disconnect."""
         async with self.lock:
-            _LOGGER.warning(f"Checking connection status for {self.ble_device.address}...")
+            # _LOGGER.warning(f"Checking connection status for {self.ble_device.address}...")
             if self.client.is_connected:
                 _LOGGER.warning(f"{self.ble_device.address} is already connected. Skipping reconnection.")
                 return  # ✅ Skip unnecessary reconnect attempts
 
-            # if self.client.is_connecting:
-            #     _LOGGER.warning(f"{self.ble_device.address} is already attempting to connect. Waiting...")
-            #     return  # ✅ Avoid interfering with an ongoing connection attempt
 
-            _LOGGER.warning(f"{self.ble_device.address} is disconnected. Starting availability monitoring...")
+            # _LOGGER.warning(f"{self.ble_device.address} is disconnected. Starting availability monitoring...")
             asyncio.create_task(self.monitor_device_availability())
-            # await self.monitor_device_availability()  # ✅ Start continuous scan
 
-            _LOGGER.warning(f"{self.ble_device.address} is disconnected. Attempting to reconnect...")
+            # _LOGGER.warning(f"{self.ble_device.address} is disconnected. Attempting to reconnect...")
             if await self.scan_for_devices():
                 await self.connect()
                 await asyncio.sleep(2)  # ✅ Allow connection stabilization
@@ -249,7 +236,7 @@ class Laifen:
 
     async def monitor_device_availability(self):
         """Continuously scan for the Laifen device and reconnect when found."""
-        _LOGGER.warning(f"Monitoring availability of {self.ble_device.address}...")
+        # _LOGGER.warning(f"Monitoring availability of {self.ble_device.address}...")
         while True:
             found_devices = await self.scan_for_devices()       
             if found_devices:
@@ -259,7 +246,7 @@ class Laifen:
                     await self.set_ble_device(matching_device)  # ✅ Set device & connect
                     return  # ✅ Stop scanning once found
             
-            _LOGGER.warning(f"{self.ble_device.address} not found, retrying in 5 seconds...")
+            # _LOGGER.warning(f"{self.ble_device.address} not found, retrying in 5 seconds...")
             for delay in [5, 10, 15, 30, 60]:
                 await asyncio.sleep(delay)
                 found_devices = await self.scan_for_devices()
@@ -269,7 +256,7 @@ class Laifen:
                         _LOGGER.warning(f"{self.ble_device.address} found! Attempting reconnection...")
                         await self.set_ble_device(matching_device)
                         return
-                _LOGGER.warning(f"{self.ble_device.address} not found, retrying in {delay} seconds...")
+                # _LOGGER.warning(f"{self.ble_device.address} not found, retrying in {delay} seconds...")
     
     async def disconnect(self):
         """Safely disconnect the Laifen BLE device and clean up Bluetooth resources."""

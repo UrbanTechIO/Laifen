@@ -55,13 +55,13 @@ class LaifenSensor(CoordinatorEntity, RestoreEntity, SensorEntity):
             if last_state and last_state.state and last_state.state != "unknown":
                 try:
                     self._last_valid_value = float(last_state.state)
-                    _LOGGER.debug(f"Restored state for {self.entity_id}: {self._last_valid_value}")
+                    # _LOGGER.debug(f"Restored state for {self.entity_id}: {self._last_valid_value}")
                 except ValueError:
                     _LOGGER.warning(f"Could not restore state for {self.entity_id}: {last_state.state}")
 
     async def _run_timer(self):
         """Increment the timer every second."""
-        _LOGGER.debug(f"Started _run_timer for {self.entity_id}")
+        # _LOGGER.debug(f"Started _run_timer for {self.entity_id}")
 
         try:
             while True:
@@ -73,7 +73,7 @@ class LaifenSensor(CoordinatorEntity, RestoreEntity, SensorEntity):
 
     async def _hold_timer(self):
         """Hold timer for 60 seconds, then reset if status stays Idle."""
-        _LOGGER.debug(f"Started _hold_timer for {self.entity_id}")
+        # _LOGGER.debug(f"Started _hold_timer for {self.entity_id}")
 
         try:
             for _ in range(60):
@@ -93,16 +93,16 @@ class LaifenSensor(CoordinatorEntity, RestoreEntity, SensorEntity):
             status = self.device.result.get("status")
 
             if self.entity_description.key == "timer":
-                _LOGGER.debug(f"Updating sensor: {self.entity_description.key}, device status: {status}")
+                # _LOGGER.debug(f"Updating sensor: {self.entity_description.key}, device status: {status}")
                 if status == "Running":
-                    _LOGGER.debug(f"Timer detected RUNNING status for {self.entity_id}")
+                    # _LOGGER.debug(f"Timer detected RUNNING status for {self.entity_id}")
                     if self._timer_task is None:
-                        _LOGGER.debug(f"Starting Timer for {self.entity_id}")
+                        # _LOGGER.debug(f"Starting Timer for {self.entity_id}")
                         self._timer_task = asyncio.create_task(self._run_timer())
                 elif status == "Idle":
-                    _LOGGER.debug(f"Timer detected IDLE status for {self.entity_id}")
+                    # _LOGGER.debug(f"Timer detected IDLE status for {self.entity_id}")
                     if self._timer_task is not None:
-                        _LOGGER.debug(f"Stopping Timer for {self.entity_id}, holding value")
+                        # _LOGGER.debug(f"Stopping Timer for {self.entity_id}, holding value")
                         self._timer_task.cancel()
                         self._timer_task = None
                         asyncio.create_task(self._hold_timer())
