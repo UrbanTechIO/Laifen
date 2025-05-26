@@ -10,7 +10,6 @@
   "requirements": [],
   "ssdp": [],
   "zeroconf": [],
-  "homekit": {},
   "dependencies": ["bluetooth"],
   "documentation": "https://github.com/UrbanTechIO/Laifen",
   "issue_tracker": "https://github.com/UrbanTechIO/Laifen/issues",
