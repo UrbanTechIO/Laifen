@@ -1,8 +1,6 @@
 # Laifen
 Home Assistant Laifen Custom Integration 
 
-This is a work in progress project, intended to integrate Laifen wave toothbrush to Home assistant.
-
 It will provide the following sensors:
 - Status Sensor
 - Mode selected
