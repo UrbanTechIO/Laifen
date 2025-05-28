@@ -44,25 +44,55 @@ class LaifenCoordinator(DataUpdateCoordinator):
         )
         self.laifen = laifen
         self.device_address = device_address
+        self._first_message = True
+        self.device_asleep = False  # ← Track sleep state
         self._store = Store(hass, LAST_KNOWN_STORE_VERSION, LAST_KNOWN_FILENAME)
 
-    async def _async_update_data(self):
-        try:
-            await self.laifen.check_connection()
-            await self.laifen.gatherdata()
-            if not self.laifen.result:
-                # _LOGGER.warning("No valid result from Laifen. Assuming device is idle or sleeping. Keeping last known values.")
-                raise UpdateFailed("Device is sleeping — do not wipe data")
+    # async def _async_update_data(self):
+    #     try:
+    #         # await self.laifen.check_connection()
+    #         await self.laifen.gatherdata()
+    #         if not self.laifen.result:
+    #             _LOGGER.warning("No valid result from Laifen. Restoring last known state.")
+    #             cached = await self._async_restore_data()
+    #             self.async_set_updated_data(cached or {})  # ✅ Keep entity alive
+    #             return cached or {}
             
-            await self._async_store_data(self.laifen.result)  # <- Save fresh state
-            return self.laifen.result
-        except BleakError as e:
-            if any(term in str(e) for term in ["Characteristic", "not found", "disconnected", "sleep", "timed out"]):
-                # _LOGGER.warning(f"Device likely asleep: {e}. Holding last known state.")
-                # Do NOT raise UpdateFailed — coordinator holds last data
+    #         await self._async_store_data(self.laifen.result)  # <- Save fresh state
+    #         return self.laifen.result
+    #     except BleakError as e:
+    #         if any(term in str(e) for term in ["Characteristic", "not found", "disconnected", "sleep", "timed out"]):
+    #             _LOGGER.warning(f"BLE error — restoring cached data: {e}")
+    #             cached = await self._async_restore_data()
+    #             self.async_set_updated_data(cached or {})  # ✅ Prevent entity loss
+    #             return cached or {}
+    #         # raise UpdateFailed(f"Unexpected BLE error: {e}")
+
+    async def _async_update_data(self):
+        if self.device_asleep:
+            # _LOGGER.info(f"{self.device_address} is asleep. Skipping update.")
+            restored = await self._async_restore_data()
+            self.async_set_updated_data(restored or {})
+            return restored or {}
+
+        try:
+            await self.laifen.gatherdata()
+            if self.laifen.result:
+                await self._async_store_data(self.laifen.result)
+                return self.laifen.result
+            else:
+                # _LOGGER.warning("gatherdata returned no result. Marking asleep and falling back.")
+                self.device_asleep = True
                 cached = await self._async_restore_data()
+                self.async_set_updated_data(cached or {})
                 return cached or {}
-            raise UpdateFailed(f"Unexpected BLE error: {e}")
+        except BleakError as e:
+            # _LOGGER.warning(f"BLE error during update: {e}. Marking as asleep.")
+            self.device_asleep = True
+            cached = await self._async_restore_data()
+            self.async_set_updated_data(cached or {})
+            return cached or {}
+
 
     async def _async_store_data(self, data: dict):
         all_data = await self._store.async_load() or {}
@@ -130,6 +160,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         else:
             # First-time setup for this device
             coordinator = LaifenCoordinator(hass, None, addr)
+            # Force name override if needed
+            # if ble_device:
+            #     ble_device.name = "Laifen"
+
             laifen = Laifen(ble_device, coordinator) if ble_device else Laifen(MockBLEDevice(addr), coordinator)
 
             coordinator.laifen = laifen
@@ -145,6 +179,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             # _LOGGER.warning(f"Initialized new Laifen {addr}.")
 
         laifens.append(laifen)
+        laifen.device_asleep = False
 
         restored = await coordinator._async_restore_data()
         if restored:
@@ -161,7 +196,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             coordinator.async_set_updated_data(restored)  # ✅ notify entities
 
         else:
-            _LOGGER.warning(f"Device {addr} is unavailable and no cached data found. Entities may stay unavailable.")
+            _LOGGER.debug(f"Device {addr} is unavailable and no cached data found. Entities may stay unavailable.")
 
 
 
@@ -172,14 +207,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             bluetooth.async_register_callback(
                 hass,
                 lambda service_info, change: asyncio.create_task(_async_device_recovery(hass, entry, service_info)),  
-                BluetoothCallbackMatcher({ADDRESS: addr}),
-                bluetooth.BluetoothScanningMode.PASSIVE,
-            )
-        )
-        entry.async_on_unload(
-            bluetooth.async_register_callback(
-                hass,
-                lambda service_info, change: asyncio.create_task(_async_update_ble(hass, entry, service_info, change)),
                 BluetoothCallbackMatcher({ADDRESS: addr}),
                 bluetooth.BluetoothScanningMode.PASSIVE,
             )
@@ -205,13 +232,6 @@ async def _async_stop(hass: HomeAssistant, event: Event) -> None:
 
     # _LOGGER.warning("Laifen devices successfully disconnected.")
 
-async def _async_update_ble(hass: HomeAssistant, entry: ConfigEntry, service_info, change):
-    """Update BLE data."""
-    laifens = hass.data.get(DOMAIN, {}).get(entry.entry_id, {}).get("laifens", [])  # ✅ Retrieve laifens from entry
-    for laifen in laifens:
-        if laifen.ble_device.address == service_info.device.address:
-            await laifen.set_ble_device(service_info.device)
-
 
 async def _async_device_recovery( hass: HomeAssistant, entry: ConfigEntry, service_info):
     """Recover Laifen devices when they wake up via passive Bluetooth events."""
@@ -235,16 +255,19 @@ async def _async_device_recovery( hass: HomeAssistant, entry: ConfigEntry, servi
         if laifen.client.is_connected:
             # _LOGGER.warning(f"{device_address} is already connected. Skipping recovery.")
             return
-
+        
+        await laifen.set_ble_device(service_info.device)
         if await laifen.connect():
             await laifen.start_notifications()
             await laifen.coordinator.async_request_refresh()
+            
+
             # _LOGGER.warning(f"Successfully reconnected to {device_address}.")
         else:
-            _LOGGER.warning(f"Failed to reconnect {device_address}. Retrying on next callback event.")
+            _LOGGER.debug(f"Failed to reconnect {device_address}. Retrying on next callback event.")
     else:
         # ✅ Do not register new devices here
-        _LOGGER.warning(f"Laifen {device_address} detected but not found in registered devices. Skipping recovery.")
+        _LOGGER.debug(f"Laifen {device_address} detected but not found in registered devices. Skipping recovery.")
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
@@ -254,7 +277,7 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
         if isinstance(data, LaifenData):
             await data.coordinator.async_request_refresh()
         else:
-            _LOGGER.warning(f"Skipping refresh for unexpected object {dev_addr}: {type(data)}")
+            _LOGGER.debug(f"Skipping refresh for unexpected object {dev_addr}: {type(data)}")
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -268,7 +291,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 await data.device.disconnect()
                 # _LOGGER.debug(f"Disconnected Laifen device {addr}")
             except Exception as e:
-                _LOGGER.warning(f"Error disconnecting {addr}: {e}")
+                _LOGGER.debug(f"Error disconnecting {addr}: {e}")
 
     hass.data[DOMAIN].pop(entry.entry_id, None)
     return True
