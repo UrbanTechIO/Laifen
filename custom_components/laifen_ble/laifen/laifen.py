@@ -146,7 +146,7 @@ class Laifen:
             return
         
         def handle_disconnect(client):
-            # _LOGGER.warning(f"{self.ble_device.address} disconnected unexpectedly.")
+            _LOGGER.warning(f"{self.ble_device.address} disconnected unexpectedly.")
             if self.coordinator:
                 self.coordinator.device_asleep = True
                 # Schedule refresh to update HA with fallback data
@@ -207,6 +207,7 @@ class Laifen:
         # If valid data, update result and pass it to the coordinator
         self.result = parsed_result
         # _LOGGER.warning(f"Parsed result: {self.result}")
+        self.coordinator.device_asleep = False
         self.coordinator.async_set_updated_data(self.result)
 
 
