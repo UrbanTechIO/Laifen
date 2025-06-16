@@ -26,7 +26,7 @@ Once configured, the integration provides the following entities:
 ## Device Discovery
 
 The integration automatically scans for nearby Laifen devices over Bluetooth.  
-> ⚠️ **Important:** Ensure the Laifen Wave is **awake and powered on** during the initial pairing process, or it may not be detected.
+> ⚠️ **Important:** Ensure the Laifen Wave is **awake** during the initial pairing process, or it may not be detected.
 
 ## Via HACS (Recommended)
 
