@@ -57,7 +57,7 @@ class LaifenSensor(CoordinatorEntity, RestoreEntity, SensorEntity):
                     self._last_valid_value = float(last_state.state)
                     # _LOGGER.debug(f"Restored state for {self.entity_id}: {self._last_valid_value}")
                 except ValueError:
-                    _LOGGER.warning(f"Could not restore state for {self.entity_id}: {last_state.state}")
+                    _LOGGER.error(f"Could not restore state for {self.entity_id}: {last_state.state}")
 
     async def _run_timer(self):
         """Increment the timer every second."""
@@ -120,6 +120,9 @@ class LaifenSensor(CoordinatorEntity, RestoreEntity, SensorEntity):
             value = self.coordinator.data.get(key)
             if value is not None:
                 self._last_valid_value = value
+                
+            # _LOGGER.warning(f"🔍 Sensor {self.entity_id} sees value: {value} from key '{key}'")
+            
             return self._last_valid_value or 0
 
         # Fallback to last known value

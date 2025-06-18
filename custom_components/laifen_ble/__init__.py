@@ -70,24 +70,25 @@ class LaifenCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self):
         if self.device_asleep:
-            # _LOGGER.info(f"{self.device_address} is asleep. Skipping update.")
+            _LOGGER.info(f"{self.device_address} is asleep. Skipping update.")
             restored = await self._async_restore_data()
             self.async_set_updated_data(restored or {})
             return restored or {}
 
         try:
+            # _LOGGER.warning("Trigger Gather of Data")
             await self.laifen.gatherdata()
             if self.laifen.result:
                 await self._async_store_data(self.laifen.result)
                 return self.laifen.result
             else:
-                # _LOGGER.warning("gatherdata returned no result. Marking asleep and falling back.")
-                self.device_asleep = True
+                # _LOGGER.warning("gatherdata returned no result. falling back.")
+                # self.device_asleep = True
                 cached = await self._async_restore_data()
                 self.async_set_updated_data(cached or {})
                 return cached or {}
         except BleakError as e:
-            # _LOGGER.warning(f"BLE error during update: {e}. Marking as asleep.")
+            _LOGGER.error(f"BLE error during update: {e}. Marking as asleep.")
             self.device_asleep = True
             cached = await self._async_restore_data()
             self.async_set_updated_data(cached or {})
@@ -106,6 +107,8 @@ class LaifenCoordinator(DataUpdateCoordinator):
     @callback
     def async_handle_notification(self, data):
         """Handle data from notifications."""
+
+        # _LOGGER.warning(f"💾 async_handle_notification called with: {data}")
         self.async_set_updated_data(data)
 
     async def async_config_entry_first_refresh(self):
@@ -128,7 +131,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     addresses = entry.data.get("devices", []) or list(stored_devices.keys())
 
     if not addresses:
-        # _LOGGER.warning("No Laifen devices found. Setup aborted until a device is added.")
+        _LOGGER.warning("No Laifen devices found. Setup aborted until a device is added.")
         raise ConfigEntryNotReady  
 
     ble_devices = []
@@ -153,9 +156,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             if isinstance(stored_data, LaifenData):
                 laifen = stored_data.device
                 coordinator = stored_data.coordinator
-                # _LOGGER.warning(f"Restored Laifen {addr} from previous data.")
+                _LOGGER.warning(f"Restored Laifen {addr} from previous data.")
             else:
-                # _LOGGER.error(f"Invalid stored object for {addr}, skipping...")
+                _LOGGER.error(f"Invalid stored object for {addr}, skipping...")
                 continue
         else:
             # First-time setup for this device
@@ -176,7 +179,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
             async_dispatcher_send(hass, f"{DEVICE_SIGNAL}_{entry.entry_id}_{addr}")
 
-            # _LOGGER.warning(f"Initialized new Laifen {addr}.")
+            _LOGGER.warning(f"Initialized new Laifen {addr}.")
 
         laifens.append(laifen)
         laifen.device_asleep = False
@@ -186,6 +189,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             coordinator.data = restored
             coordinator.async_set_updated_data(restored)
             laifen.result = restored 
+        else:
+            laifen.result = {} 
 
         if ble_device and await laifen.connect():
             await laifen.start_notifications()
