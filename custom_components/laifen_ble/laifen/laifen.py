@@ -22,6 +22,7 @@ class Laifen:
         self.coordinator = coordinator
         self.lock = asyncio.Lock()  # Ensure concurrency safety
         self._first_message = True  # Ignore initial unwanted message
+        self._reconnecting = asyncio.Lock()
         # _LOGGER.warning(f"Laifen instance created for {self.ble_device.address}")
 
     async def scan_for_devices(self):
@@ -38,15 +39,20 @@ class Laifen:
 
 
     async def connect(self):
+        if not self.client:
+            self.client = BleakClient(self.ble_device)
+            
         if self.client.is_connected:
+            _LOGGER.debug(f"{self.ble_device.address} Already Connected!")
             return True
 
         max_attempts = 10
         for attempt in range(1, max_attempts + 1):
             try:
                 if attempt == 1:
-                    _LOGGER.info(f"Starting connection attempts to {self.ble_device.address}")
-                await asyncio.wait_for(self.client.connect(), timeout=60)
+                    _LOGGER.debug(f"Starting connection attempts to {self.ble_device.address}")
+                await asyncio.wait_for(self.client.connect(), timeout=10)
+                await asyncio.sleep(2)
 
                 # ✅ Log all characteristics for debug purposes
                 # services = await self.client.get_services()
@@ -58,14 +64,16 @@ class Laifen:
                 #         )
 
                 if self.client.is_connected:
+                    self.client.set_disconnected_callback(self._handle_disconnect)
+                    self.coordinator.device_asleep = False
                     # _LOGGER.warning(f"Connected to {self.ble_device.address}")
                     return True
             except asyncio.CancelledError:
-                # _LOGGER.warning(f"Connection to {self.ble_device.address} was cancelled. Marking asleep.")
                 if self.coordinator:
+                    _LOGGER.warning(f"Connection to {self.ble_device.address} was cancelled. Marking asleep.")
                     self.coordinator.device_asleep = True
                 return False
-            except (BleakError, TimeoutError) as e:
+            except (BleakError, asyncio.TimeoutError, TimeoutError) as e:
                 _LOGGER.debug(f"Connection attempt {attempt} failed: {e}")
             await asyncio.sleep(2)
 
@@ -78,7 +86,7 @@ class Laifen:
     async def send_command(self, command: bytes):
         """Send a HEX command to the Laifen device."""
         async with self.lock:
-            if self.client.is_connected:
+            if self.client and self.client.is_connected:
                 try:
                     # _LOGGER.info(f"Sending command to {self.ble_device.address}: {command.hex()}")
                     await self.client.write_gatt_char(CHARACTERISTIC_UUID, command)
@@ -137,14 +145,14 @@ class Laifen:
             # return False
             return
         
-        def handle_disconnect(client):
-            # _LOGGER.warning(f"{self.ble_device.address} disconnected unexpectedly.")
-            if self.coordinator:
-                self.coordinator.device_asleep = True
-                # Schedule refresh to update HA with fallback data
-                asyncio.create_task(self.coordinator.async_request_refresh())
+        # def handle_disconnect(client):
+        #     # _LOGGER.warning(f"{self.ble_device.address} disconnected unexpectedly.")
+        #     if self.coordinator:
+        #         self.coordinator.device_asleep = True
+        #         # Schedule refresh to update HA with fallback data
+        #         asyncio.create_task(self.coordinator.async_request_refresh())
 
-        self.client.set_disconnected_callback(handle_disconnect)
+        # self.client.set_disconnected_callback(self._handle_disconnect)
 
         for attempt in range(5):
             try:
@@ -169,7 +177,7 @@ class Laifen:
     async def stop_notifications(self):
         """Stop BLE notifications."""
         async with self.lock:
-            if not self.client.is_connected:
+            if not self.client or not self.client.is_connected:
                 # _LOGGER.warning(f"Cannot stop notifications; {self.ble_device.address} is not connected.")
                 return
             # _LOGGER.warning(f"Stopping notifications for {self.ble_device.address}...")
@@ -184,8 +192,8 @@ class Laifen:
         if not self.coordinator:
             _LOGGER.error("⚠️ self.coordinator is not assigned — cannot update HA entities!")
             return
-        else:
-            _LOGGER.debug(f"✅ Coordinator is assigned: {self.coordinator}")
+        # else:
+            # _LOGGER.debug(f"✅ Coordinator is assigned: {self.coordinator}")
 
             
         """Handle incoming notifications and update Home Assistant entities."""
@@ -196,7 +204,7 @@ class Laifen:
         # _LOGGER.warning(f"Converted Data to Hex from {sender}: {data_str}")
 
         # Enforce EXACT match to the known valid packet format
-        if data_str.startswith("aa0a021") or len(data_str) >= 50:
+        if data_str.startswith("aa0a021") and len(data_str) >= 50:
             # _LOGGER.warning("Data is valid, Continue")
             # Proceed with parsing valid data
             parsed_result = self.parse_data(data)
@@ -249,24 +257,70 @@ class Laifen:
         # return parsed_result  # ✅ Returns the full dictionary
             
     async def set_ble_device(self, ble_device):
-        """Set Bluetooth device and reconnect."""
-        # _LOGGER.warning(f"Setting BLE device: {ble_device.address}")
-        if self.client is None or self.client.is_connected is False or self.ble_device.address != ble_device.address:
-            self.ble_device = ble_device
-            self.client = BleakClient(ble_device)
+        """Forcefully set Bluetooth device and create a fresh client."""
+        if self.client and self.client.is_connected:
+            await self.client.disconnect()
+
+        self.ble_device = ble_device
+        self.address = ble_device.address
+        self.client = BleakClient(self.ble_device)  # ✅ Always reset client
+        self.client.set_disconnected_callback(self._handle_disconnect)
 
     
     async def disconnect(self):
-        """Safely disconnect the Laifen BLE device and clean up Bluetooth resources."""
-        if self.client.is_connected:
-            # _LOGGER.warning(f"Disconnecting Laifen device {self.ble_device.address}...")
+        """Safely disconnect with better resource cleanup"""
+        if self.client and self.client.is_connected:
             try:
+                await self.stop_notifications()
                 await self.client.disconnect()
-                # _LOGGER.warning(f"Laifen device {self.ble_device.address} disconnected successfully.")
+                _LOGGER.debug(f"Disconnected {self.ble_device.address} cleanly")
             except BleakError as e:
-                # _LOGGER.warning(f"Error disconnecting {self.ble_device.address}: {e}")
-                return
-                
+                _LOGGER.warning(f"Error during disconnect: {e}")
+            finally:
+                self.client = None  # Ensure cleanup
 
-        # ✅ Ensure cleanup of the BLE client before Home Assistant shutdown
-        self.client = None
+
+    def _handle_disconnect(self, client):
+        _LOGGER.warning(f"{self.ble_device.address} disconnected.")
+        if self.coordinator:
+            last_status = self.result.get("status", "Unknown")
+
+            _LOGGER.warning(f"{self.ble_device.address} disconnected — will attempt reconnection.")
+            self.coordinator.device_asleep = False
+            asyncio.create_task(self._aggressive_reconnect())
+
+
+
+    async def _aggressive_reconnect(self, max_attempts=10, initial_delay=1):
+        async with self._reconnecting:  # ✅ Prevent overlapping loops
+            attempt = 0
+            while attempt < max_attempts:
+                try:
+                    if not self.client or not self.client.is_connected:
+                        devices = await BleakScanner.discover()
+                        for dev in devices:
+                            if dev.address.lower() == self.address.lower():
+                                await self.set_ble_device(dev)
+                                break
+
+                        await asyncio.sleep(initial_delay)
+                        _LOGGER.info(f"Reconnect attempt {attempt + 1}/{max_attempts} for {self.address}")
+
+                        if not self.client:
+                            self.client = BleakClient(self.ble_device)
+
+                        if await self.connect():
+                            await self.start_notifications()
+                            await self.gatherdata()
+                            _LOGGER.info(f"Reconnected to {self.address}")
+                            return True
+                except Exception as e:
+                    _LOGGER.warning(f"Reconnect attempt {attempt + 1} failed: {e}")
+                attempt += 1
+
+            cached = await self.coordinator._async_restore_data()
+            self.coordinator.device_asleep = True
+            self.coordinator.async_set_updated_data(cached or {})
+            return False
+
+
