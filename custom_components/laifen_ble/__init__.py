@@ -95,7 +95,7 @@ class LaifenCoordinator(DataUpdateCoordinator):
 
                     
         except (BleakError, asyncio.TimeoutError) as e:
-            _LOGGER.error(f"BLE error during update: {e}. Will retry before marking asleep.")
+            _LOGGER.debug(f"BLE error during update: {e}. Will retry before marking asleep.")
             # Don't immediately mark as asleep - will happen automatically if retries fail
             cached = await self._async_restore_data()
             self.async_set_updated_data(cached or {})
