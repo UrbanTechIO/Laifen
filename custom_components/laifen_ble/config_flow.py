@@ -31,7 +31,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         found_devices = {device.name: device.address for device in devices if device.name.startswith("LFTB")}
         
         if not found_devices:
-            _LOGGER.error("No Laifen devices found via Bluetooth scan.")
+            _LOGGER.debug("No Laifen devices found via Bluetooth scan.")
             return self.async_abort(reason="no_matching_device_found")
 
         # If multiple devices, prompt user to select

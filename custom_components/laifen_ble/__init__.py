@@ -273,7 +273,7 @@ async def _async_device_recovery(hass: HomeAssistant, entry: ConfigEntry, servic
         if await laifen.connect():
             await laifen.start_notifications()
             await laifen.coordinator.async_request_refresh()
-            _LOGGER.info(f"Successfully reconnected to {device_address}.")
+            _LOGGER.debug(f"Successfully reconnected to {device_address}.")
         else:
             _LOGGER.debug(f"Failed to reconnect {device_address}. Retrying on next callback event.")
     else:
