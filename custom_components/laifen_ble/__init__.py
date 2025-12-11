@@ -71,9 +71,9 @@ class LaifenCoordinator(DataUpdateCoordinator):
                 if self.laifen.result:
                     # Always check connection, even if not Running
                     if not self.laifen.client or not self.laifen.client.is_connected:
-                        _LOGGER.warning(f"{self.device_address} appears disconnected — attempting immediate reconnect.")
+                        _LOGGER.debug(f"{self.device_address} appears disconnected — attempting immediate reconnect.")
                         if not await self.laifen._aggressive_reconnect(max_attempts=5):
-                            _LOGGER.warning(f"Reconnection failed for {self.device_address}, marking asleep.")
+                            _LOGGER.warning("Reconnection failed for %s, marking asleep", self.device_address)
                             self.device_asleep = True
                             return await self._async_restore_data() or {}
 
@@ -127,7 +127,7 @@ class LaifenCoordinator(DataUpdateCoordinator):
                 break
             except UpdateFailed:
                 attempts += 1
-                # _LOGGER.warning("Device not reachable, retrying in 30 seconds...")
+                # _LOGGER.debug("Device not reachable, retrying in 30 seconds...")
                 await asyncio.sleep(30)
 
 
@@ -150,7 +150,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     for addr in addresses:
         device = bluetooth.async_ble_device_from_address(hass, addr.upper(), True)
         if not device:
-            _LOGGER.warning(f"[Startup] BLE device {addr} not found (likely sleeping). Will restore passively.")
+            _LOGGER.debug(f"[Startup] BLE device {addr} not found (likely sleeping). Will restore passively.")
         ble_devices.append(device)
 
     for addr, ble_device in zip(addresses, ble_devices):
@@ -162,7 +162,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             coordinator = entry_data[addr].coordinator
             has_cached_data = True  # Because we have previous data for this device
             restored = await coordinator._async_restore_data()
-            _LOGGER.warning(f"Restored Laifen {addr} from previous data.")
+            _LOGGER.debug(f"Restored Laifen {addr} from previous data.")
         else:
             # First time initialization
             coordinator = LaifenCoordinator(hass, None, addr)
@@ -234,16 +234,16 @@ async def _async_device_recovery(hass: HomeAssistant, entry: ConfigEntry, servic
     """Recover Laifen devices when they wake up via passive Bluetooth events."""
 
     device_address = service_info.device.address
-    _LOGGER.warning(f"Bluetooth recovery callback fired for {device_address}")
+    _LOGGER.debug(f"Bluetooth recovery callback fired for {device_address}")
 
     entry_devices: dict[str, LaifenData] = hass.data[DOMAIN][entry.entry_id]
 
     if device_address in entry_devices:
-        _LOGGER.warning(f"Laifen {device_address} detected via Bluetooth callback! Restoring connection...")
+        _LOGGER.debug(f"Laifen {device_address} detected via Bluetooth callback! Restoring connection...")
 
         laifen_data = entry_devices.get(device_address)
         if not isinstance(laifen_data, LaifenData):
-            # _LOGGER.warning(f"Device {device_address} is stored incorrectly. Expected LaifenData but got {type(laifen_data)}.")
+            # _LOGGER.debug(f"Device {device_address} is stored incorrectly. Expected LaifenData but got {type(laifen_data)}.")
             return
 
         laifen = laifen_data.device
@@ -251,12 +251,12 @@ async def _async_device_recovery(hass: HomeAssistant, entry: ConfigEntry, servic
         coordinator = laifen_data.coordinator  # ✅ ensure linked
 
         if laifen.client and laifen.client.is_connected:
-            _LOGGER.warning(f"{device_address} is already connected. Skipping recovery.")
+            _LOGGER.debug(f"{device_address} is already connected. Skipping recovery.")
             return
 
-        _LOGGER.warning(f"Old device for {device_address}: {laifen.ble_device}")
+        _LOGGER.debug(f"Old device for {device_address}: {laifen.ble_device}")
         await laifen.set_ble_device(service_info.device)
-        _LOGGER.warning(f"Updated device for {device_address}: {laifen.ble_device}")
+        _LOGGER.debug(f"Updated device for {device_address}: {laifen.ble_device}")
 
         # If the passive scan gave an incomplete device, refresh it from a full scan
         if not getattr(service_info.device, "details", None):
@@ -273,7 +273,7 @@ async def _async_device_recovery(hass: HomeAssistant, entry: ConfigEntry, servic
         if await laifen.connect():
             await laifen.start_notifications()
             await laifen.coordinator.async_request_refresh()
-            _LOGGER.warning(f"Successfully reconnected to {device_address}.")
+            _LOGGER.info(f"Successfully reconnected to {device_address}.")
         else:
             _LOGGER.debug(f"Failed to reconnect {device_address}. Retrying on next callback event.")
     else:

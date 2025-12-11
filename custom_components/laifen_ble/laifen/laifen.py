@@ -23,18 +23,18 @@ class Laifen:
         self.lock = asyncio.Lock()  # Ensure concurrency safety
         self._first_message = True  # Ignore initial unwanted message
         self._reconnecting = asyncio.Lock()
-        # _LOGGER.warning(f"Laifen instance created for {self.ble_device.address}")
+        # _LOGGER.debug(f"Laifen instance created for {self.ble_device.address}")
 
     async def scan_for_devices(self):
         """Scan for Laifen toothbrush devices."""
-        # _LOGGER.warning("Scanning for devices...")
+        # _LOGGER.debug("Scanning for devices...")
         scanner = BleakScanner()
         devices = await scanner.discover()
         found_devices = [device for device in devices if device.name and (device.name.startswith("LFTB") or device.name.startswith("Laifen Toothbrush"))]
         if not found_devices:
-            # _LOGGER.warning("No Laifen devices found during scan.")
+            # _LOGGER.debug("No Laifen devices found during scan.")
             return None
-        # _LOGGER.warning(f"Found Laifen devices: {[device.address for device in found_devices]}")
+        # _LOGGER.debug(f"Found Laifen devices: {[device.address for device in found_devices]}")
         return found_devices
 
 
@@ -70,7 +70,7 @@ class Laifen:
                     return True
             except asyncio.CancelledError:
                 if self.coordinator:
-                    _LOGGER.warning(f"Connection to {self.ble_device.address} was cancelled. Marking asleep.")
+                    _LOGGER.debug(f"Connection to {self.ble_device.address} was cancelled. Marking asleep.")
                     self.coordinator.device_asleep = True
                 return False
             except (BleakError, asyncio.TimeoutError, TimeoutError) as e:
@@ -275,17 +275,17 @@ class Laifen:
                 await self.client.disconnect()
                 _LOGGER.debug(f"Disconnected {self.ble_device.address} cleanly")
             except BleakError as e:
-                _LOGGER.warning(f"Error during disconnect: {e}")
+                _LOGGER.debug(f"Error during disconnect: {e}")
             finally:
                 self.client = None  # Ensure cleanup
 
 
     def _handle_disconnect(self, client):
-        _LOGGER.warning(f"{self.ble_device.address} disconnected.")
+        _LOGGER.debug(f"{self.ble_device.address} disconnected.")
         if self.coordinator:
             last_status = self.result.get("status", "Unknown")
 
-            _LOGGER.warning(f"{self.ble_device.address} disconnected — will attempt reconnection.")
+            _LOGGER.debug(f"{self.ble_device.address} disconnected — will attempt reconnection.")
             self.coordinator.device_asleep = False
             asyncio.create_task(self._aggressive_reconnect())
 
@@ -315,7 +315,7 @@ class Laifen:
                             _LOGGER.info(f"Reconnected to {self.address}")
                             return True
                 except Exception as e:
-                    _LOGGER.warning(f"Reconnect attempt {attempt + 1} failed: {e}")
+                    _LOGGER.debug(f"Reconnect attempt {attempt + 1} failed: {e}")
                 attempt += 1
 
             cached = await self.coordinator._async_restore_data()
