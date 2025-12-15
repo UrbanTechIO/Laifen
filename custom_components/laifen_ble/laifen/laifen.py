@@ -23,18 +23,18 @@ class Laifen:
         self.lock = asyncio.Lock()  # Ensure concurrency safety
         self._first_message = True  # Ignore initial unwanted message
         self._reconnecting = asyncio.Lock()
-        # _LOGGER.warning(f"Laifen instance created for {self.ble_device.address}")
+        # _LOGGER.debug(f"Laifen instance created for {self.ble_device.address}")
 
     async def scan_for_devices(self):
         """Scan for Laifen toothbrush devices."""
-        # _LOGGER.warning("Scanning for devices...")
+        # _LOGGER.debug("Scanning for devices...")
         scanner = BleakScanner()
         devices = await scanner.discover()
         found_devices = [device for device in devices if device.name and (device.name.startswith("LFTB") or device.name.startswith("Laifen Toothbrush"))]
         if not found_devices:
-            # _LOGGER.warning("No Laifen devices found during scan.")
+            # _LOGGER.debug("No Laifen devices found during scan.")
             return None
-        # _LOGGER.warning(f"Found Laifen devices: {[device.address for device in found_devices]}")
+        # _LOGGER.debug(f"Found Laifen devices: {[device.address for device in found_devices]}")
         return found_devices
 
 
@@ -70,7 +70,7 @@ class Laifen:
                     return True
             except asyncio.CancelledError:
                 if self.coordinator:
-                    _LOGGER.warning(f"Connection to {self.ble_device.address} was cancelled. Marking asleep.")
+                    _LOGGER.debug(f"Connection to {self.ble_device.address} was cancelled. Marking asleep.")
                     self.coordinator.device_asleep = True
                 return False
             except (BleakError, asyncio.TimeoutError, TimeoutError) as e:
@@ -88,7 +88,7 @@ class Laifen:
         async with self.lock:
             if self.client and self.client.is_connected:
                 try:
-                    # _LOGGER.info(f"Sending command to {self.ble_device.address}: {command.hex()}")
+                    # _LOGGER.debug(f"Sending command to {self.ble_device.address}: {command.hex()}")
                     await self.client.write_gatt_char(CHARACTERISTIC_UUID, command)
                     return True
                 except BleakError as e:
@@ -97,12 +97,12 @@ class Laifen:
 
     async def turn_on(self):
         """Turn on the Laifen toothbrush."""
-        _LOGGER.info(f"Turning on {self.ble_device.address}...")
+        _LOGGER.debug(f"Turning on {self.ble_device.address}...")
         return await self.send_command(bytes.fromhex("AA0F010101A4"))
 
     async def turn_off(self):
         """Turn off the Laifen toothbrush."""
-        _LOGGER.info(f"Turning off {self.ble_device.address}...")
+        _LOGGER.debug(f"Turning off {self.ble_device.address}...")
         return await self.send_command(bytes.fromhex("AA0F010100A5"))
 
     async def gatherdata(self):
@@ -167,7 +167,7 @@ class Laifen:
                 # _LOGGER.warning(f"Failed to start notifications (attempt {attempt+1}/5): {e}")
                 await asyncio.sleep(1)
 
-        _LOGGER.error(f"Could not start notifications for {self.ble_device.address} after multiple retries.")
+        _LOGGER.debug(f"Could not start notifications for {self.ble_device.address} after multiple retries.")
 
         # Fallback — treat device as asleep and defer to recovery next time
         if self.coordinator:
@@ -190,7 +190,7 @@ class Laifen:
 
     def notification_handler(self, sender, data):
         if not self.coordinator:
-            _LOGGER.error("⚠️ self.coordinator is not assigned — cannot update HA entities!")
+            _LOGGER.debug("⚠️ self.coordinator is not assigned — cannot update HA entities!")
             return
         # else:
             # _LOGGER.debug(f"✅ Coordinator is assigned: {self.coordinator}")
@@ -251,7 +251,7 @@ class Laifen:
             }
 
         except Exception as e:
-            _LOGGER.error(f"Unexpected error while parsing data: {e}")
+            _LOGGER.debug(f"Unexpected error while parsing data: {e}")
             return {key: 0 if key != "raw_data" else data_str for key in ["raw_data", "status", "mode", "battery_level", "brushing_time", "vibration_strength", "oscillation_range", "oscillation_speed"]}
         
         # return parsed_result  # ✅ Returns the full dictionary
@@ -275,17 +275,17 @@ class Laifen:
                 await self.client.disconnect()
                 _LOGGER.debug(f"Disconnected {self.ble_device.address} cleanly")
             except BleakError as e:
-                _LOGGER.warning(f"Error during disconnect: {e}")
+                _LOGGER.debug(f"Error during disconnect: {e}")
             finally:
                 self.client = None  # Ensure cleanup
 
 
     def _handle_disconnect(self, client):
-        _LOGGER.warning(f"{self.ble_device.address} disconnected.")
+        _LOGGER.debug(f"{self.ble_device.address} disconnected.")
         if self.coordinator:
             last_status = self.result.get("status", "Unknown")
 
-            _LOGGER.warning(f"{self.ble_device.address} disconnected — will attempt reconnection.")
+            _LOGGER.debug(f"{self.ble_device.address} disconnected — will attempt reconnection.")
             self.coordinator.device_asleep = False
             asyncio.create_task(self._aggressive_reconnect())
 
@@ -304,7 +304,7 @@ class Laifen:
                                 break
 
                         await asyncio.sleep(initial_delay)
-                        _LOGGER.info(f"Reconnect attempt {attempt + 1}/{max_attempts} for {self.address}")
+                        _LOGGER.debug(f"Reconnect attempt {attempt + 1}/{max_attempts} for {self.address}")
 
                         if not self.client:
                             self.client = BleakClient(self.ble_device)
@@ -312,10 +312,10 @@ class Laifen:
                         if await self.connect():
                             await self.start_notifications()
                             await self.gatherdata()
-                            _LOGGER.info(f"Reconnected to {self.address}")
+                            _LOGGER.debug(f"Reconnected to {self.address}")
                             return True
                 except Exception as e:
-                    _LOGGER.warning(f"Reconnect attempt {attempt + 1} failed: {e}")
+                    _LOGGER.debug(f"Reconnect attempt {attempt + 1} failed: {e}")
                 attempt += 1
 
             cached = await self.coordinator._async_restore_data()

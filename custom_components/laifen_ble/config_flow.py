@@ -27,11 +27,11 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # Discover available Bluetooth devices
         devices = bluetooth.async_discovered_service_info(self.hass)
 
-        _LOGGER.warning(f"Discovered devices: {[device.name for device in devices]}")  # Log all discovered devices
+        _LOGGER.debug(f"Discovered devices: {[device.name for device in devices]}")  # Log all discovered devices
         found_devices = {device.name: device.address for device in devices if device.name.startswith("LFTB")}
         
         if not found_devices:
-            _LOGGER.error("No Laifen devices found via Bluetooth scan.")
+            _LOGGER.debug("No Laifen devices found via Bluetooth scan.")
             return self.async_abort(reason="no_matching_device_found")
 
         # If multiple devices, prompt user to select

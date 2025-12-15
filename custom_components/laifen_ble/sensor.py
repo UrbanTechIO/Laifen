@@ -57,7 +57,7 @@ class LaifenSensor(CoordinatorEntity, RestoreEntity, SensorEntity):
                     self._last_valid_value = float(last_state.state)
                     # _LOGGER.debug(f"Restored state for {self.entity_id}: {self._last_valid_value}")
                 except ValueError:
-                    _LOGGER.error(f"Could not restore state for {self.entity_id}: {last_state.state}")
+                    _LOGGER.debug(f"Could not restore state for {self.entity_id}: {last_state.state}")
 
     async def _run_timer(self):
         """Increment the timer every second."""
@@ -152,4 +152,4 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     if entities:
         async_add_entities(entities)
     else:
-        _LOGGER.warning("No valid Laifen sensor entities to add.")
+        _LOGGER.debug("No valid Laifen sensor entities to add.")

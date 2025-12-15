@@ -70,4 +70,4 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     if entities:
         async_add_entities(entities)
     else:
-        _LOGGER.warning("No valid Laifen switch entities to add.")
+        _LOGGER.debug("No valid Laifen switch entities to add.")
