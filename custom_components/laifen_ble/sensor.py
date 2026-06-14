@@ -110,6 +110,19 @@ class LaifenSensor(CoordinatorEntity, RestoreEntity, SensorEntity):
                         asyncio.create_task(self._hold_timer())
 
     @property
+    def available(self) -> bool:
+        # Only expose this sensor if the device has ever reported this key.
+        # This hides V2 Pro-only sensors (brushing_duration, over_pressure_level,
+        # active_strength/range/speed) from V1 devices, and vice versa, without
+        # needing any per-sensor proto_version checks.
+        if not self.device.result:
+            return False
+        # timer and status are always available once connected
+        if self.entity_description.key in ("timer", "status"):
+            return True
+        return self.entity_description.key in self.device.result
+
+    @property
     def native_value(self) -> str | int | float | None:
         key = self.entity_description.key
 
