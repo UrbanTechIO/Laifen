@@ -58,4 +58,7 @@ Then, add the integration via:
 
 - GitHub: [UrbanTechIO/Laifen](https://github.com/UrbanTechIO/Laifen)
 
-![Air Quality Card](./custom_components/laifen_ble/img/laifen.png)
+![Laifen V2](./custom_components/laifen_ble/img/laifen_v2_1.jpg)
+![Laifen V2](./custom_components/laifen_ble/img/laifen_v2_2.jpg)
+![Laifen V2](./custom_components/laifen_ble/img/laifen_v2_3.jpg)
+![Laifen V1](./custom_components/laifen_ble/img/laifen.png)
