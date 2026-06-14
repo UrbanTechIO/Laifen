@@ -21,7 +21,7 @@ from datetime import timedelta
 from .const import DEVICE_TIMEOUT, DOMAIN, UPDATE_SECONDS
 from .models import LaifenData, DEVICE_REGISTRY, DEVICE_SIGNAL
 
-PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.SWITCH]
+PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.SWITCH, Platform.NUMBER, Platform.SELECT, Platform.BINARY_SENSOR]
 _LOGGER = logging.getLogger(__name__)
 
 class MockBLEDevice:
@@ -66,8 +66,19 @@ class LaifenCoordinator(DataUpdateCoordinator):
         try:
             # Add timeout for the entire operation
             async with async_timeout.timeout(30):
-                await self.laifen.gatherdata()
-                
+                # V2 Pro (Wave Pro) is local_push and streams its full status
+                # via notifications (periodic 0xC1-03 broadcasts plus
+                # change-triggered 0x81-03 updates). While brushing, it also
+                # streams high-frequency 0x82-0x0C/0x82-0x0D telemetry.
+                # Issuing an additional GATT *read* every UPDATE_SECONDS on
+                # top of that flood was found to overwhelm the connection
+                # during brushing, causing repeated disconnects/reconnects
+                # and dropped writes (e.g. power-off not taking effect).
+                # For V2 Pro, skip the read entirely and rely purely on
+                # push notifications — just check connection health below.
+                if self.laifen._proto_version != "v2pro":
+                    await self.laifen.gatherdata()
+
                 if self.laifen.result:
                     # Always check connection, even if not Running
                     if not self.laifen.client or not self.laifen.client.is_connected:

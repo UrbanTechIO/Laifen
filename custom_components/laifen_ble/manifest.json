@@ -7,7 +7,7 @@
       "service_uuid": "0000ff01-0000-1000-8000-00805f9b34fb"
     }
   ],
-  "requirements": [],
+  "requirements": ["bleak-retry-connector>=3.0.0"],
   "ssdp": [],
   "zeroconf": [],
   "homekit": {},
@@ -20,5 +20,5 @@
   ],
   "iot_class": "local_push",
 
-  "version": "2.0.4"
+  "version": "2.2.0"
 }

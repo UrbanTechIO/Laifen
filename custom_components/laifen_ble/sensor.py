@@ -21,16 +21,18 @@ _LOGGER = logging.getLogger(__name__)
 SCAN_INTERVAL = timedelta(seconds=1)
 
 class LaifenSensor(CoordinatorEntity, RestoreEntity, SensorEntity):
+    _attr_has_entity_name = True
+    _attr_should_poll     = False
+
     def __init__(self, device, coordinator, description: SensorEntityDescription) -> None:
         super().__init__(coordinator)
         self.entity_description = description
         self.device = device
         self._attr_unique_id = f"{device.address}_{description.key}"
-        self._attr_name = f"{device.name} Toothbrush {description.name}"
+        self._attr_name = description.name
         self._last_valid_value = None
         self._timer_task = None
         self._timer_state = 0
-        self._attr_should_poll = False
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self.device.address)},
             manufacturer="Laifen",

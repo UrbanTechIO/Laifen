@@ -23,24 +23,6 @@ SENSOR_TYPES = [
         icon="mdi:toothbrush-electric",
     ),
     LaifenSensorEntityDescription(
-        key="vibration_strength",
-        name="Vibration Strength",
-        unique_id="laifen_vibration_strength",
-        icon="mdi:zodiac-aquarius",
-    ),
-    LaifenSensorEntityDescription(
-        key="oscillation_range",
-        name="Oscillation Range",
-        unique_id="laifen_oscillation_range",
-        icon="mdi:arrow-oscillating",
-    ),
-    LaifenSensorEntityDescription(
-        key="oscillation_speed",
-        name="Oscillation Speed",
-        unique_id="laifen_oscillation_speed",
-        icon="mdi:speedometer",
-    ),
-    LaifenSensorEntityDescription(
         key="mode",
         name="Mode",
         unique_id="laifen_mode",
@@ -67,4 +49,52 @@ SENSOR_TYPES = [
         unique_id="laifen_timer",
         icon="mdi:timer",
     ),
+    LaifenSensorEntityDescription(
+        key="active_strength",
+        name="Strength",
+        unique_id="laifen_active_strength",
+        icon="mdi:sine-wave",
+    ),
+    LaifenSensorEntityDescription(
+        key="active_range",
+        name="Range",
+        unique_id="laifen_active_range",
+        icon="mdi:arrow-oscillating",
+    ),
+    LaifenSensorEntityDescription(
+        key="active_speed",
+        name="Speed",
+        unique_id="laifen_active_speed",
+        icon="mdi:speedometer",
+    ),
+    LaifenSensorEntityDescription(
+        key="brushing_duration",
+        name="Brushing Duration",
+        unique_id="laifen_brushing_duration",
+        icon="mdi:timer-sand",
+        native_unit_of_measurement="s",
+    ),
+    LaifenSensorEntityDescription(
+        key="over_pressure_level",
+        name="Over Pressure Level",
+        unique_id="laifen_over_pressure_level",
+        icon="mdi:gauge",
+    ),
 ]
+
+# Mode options — Mode 4 is appended dynamically when HF is on
+MODE_OPTIONS_BASE = ["Mode 1", "Mode 2", "Mode 3"]
+MODE_OPTIONS_HF   = ["Mode 1", "Mode 2", "Mode 3", "Mode 4"]
+
+# Over Pressure level options (Wave Pro)
+OVER_PRESSURE_LEVEL_OPTIONS = ["Light", "Medium", "Hard"]
+
+# Slider limits
+STRENGTH_MIN      = 1
+STRENGTH_MIN_HF     = 11   # Mode 4 (HF) strength range is 11-20, not 1-20
+STRENGTH_MAX_NORMAL = 10
+STRENGTH_MAX_HF     = 20   # only when Mode 4 is active
+RANGE_MIN         = 1
+RANGE_MAX         = 10
+SPEED_MIN         = 1
+SPEED_MAX         = 10
