@@ -56,6 +56,51 @@ class LaifenBinarySensor(CoordinatorEntity, BinarySensorEntity):
         self.async_on_remove(self.coordinator.async_add_listener(self.async_write_ha_state))
 
 
+class LaifenConnectionSensor(CoordinatorEntity, BinarySensorEntity):
+    """
+    BLE connection status sensor — Connected / Disconnected.
+
+    Works for both V1 (LFTB01) and V2 Pro (Wave Pro).
+
+    ON  = BLE link is currently established (client exists and is_connected)
+    OFF = not connected (sleeping, out of range, or reconnecting)
+
+    Device class CONNECTIVITY makes HA display "Connected" / "Disconnected"
+    with the correct icon automatically, and integrates with the HA dashboard
+    Connected/Disconnected UI styling.
+
+    The entity updates whenever the coordinator pushes new data, which happens
+    on every connect, disconnect, and successful notification — so latency is
+    effectively immediate (same as the rest of the integration's entities).
+    """
+
+    _attr_has_entity_name = True
+    _attr_should_poll     = False
+    _attr_device_class    = BinarySensorDeviceClass.CONNECTIVITY
+
+    def __init__(self, device, coordinator):
+        super().__init__(coordinator)
+        self.device = device
+        self._attr_unique_id   = f"{device.address}_connection"
+        self._attr_name        = "Connection"
+        self._attr_device_info = laifen_device_info(device)
+
+    @property
+    def available(self) -> bool:
+        # Always available — even when disconnected the entity itself is valid
+        return True
+
+    @property
+    def is_on(self) -> bool:
+        """True when the BLE client is connected."""
+        client = self.device.client
+        return bool(client and client.is_connected)
+
+    async def async_added_to_hass(self):
+        await super().async_added_to_hass()
+        self.async_on_remove(self.coordinator.async_add_listener(self.async_write_ha_state))
+
+
 # (key, name, icon)
 WAVE_PRO_BINARY_SENSORS = [
     ("deep_clean",         "Deep Clean",            "mdi:shimmer"),
@@ -120,6 +165,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
             data = hass.data[DOMAIN][entry.entry_id].get(address)
 
         if isinstance(data, LaifenData):
+            entities.append(
+                LaifenConnectionSensor(data.device, data.coordinator)
+            )
             for key, name, icon in WAVE_PRO_BINARY_SENSORS:
                 entities.append(
                     LaifenBinarySensor(data.device, data.coordinator, key, name, icon)
