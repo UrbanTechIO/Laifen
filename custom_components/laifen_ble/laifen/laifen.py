@@ -205,6 +205,10 @@ class Laifen:
         _LOGGER.debug(f"{self.ble_device.address} disconnected.")
         if self.coordinator:
             self.coordinator.device_asleep = False
+            # Push a coordinator update immediately so the Connection binary
+            # sensor (and any other entities) reflect the disconnected state
+            # without waiting for the next coordinator tick.
+            self.coordinator.async_set_updated_data(self.result or {})
             asyncio.create_task(self._aggressive_reconnect())
 
     async def _aggressive_reconnect(self, max_attempts=10, initial_delay=1):
@@ -237,6 +241,8 @@ class Laifen:
                             if self._proto_version != "v2pro":
                                 await self.gatherdata()
                             _LOGGER.debug(f"Reconnected to {self.address}")
+                            # Push update so Connection sensor flips to ON
+                            self.coordinator.async_set_updated_data(self.result or {})
                             return True
                 except Exception as e:
                     _LOGGER.debug(f"Reconnect attempt {attempt+1} failed: {e}")
