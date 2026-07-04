@@ -677,7 +677,11 @@ class Laifen:
         prev = self.result or {}
 
         battery      = payload[2]
-        duration_sec = payload[5]
+        # Duration is stored per-mode as 16-bit little-endian seconds.
+        # Mode 0's duration sits at payload[5:7]; all modes are normally set
+        # to the same value by the app. Reading the full 16-bit value (not
+        # just the low byte) is required for durations >255s (e.g. 300s=0x012C).
+        duration_sec = payload[5] | (payload[6] << 8)
         status       = "Running" if payload[13] == 1 else "Idle"
 
         op_key   = (payload[27], payload[28])
@@ -695,7 +699,7 @@ class Laifen:
         return {
             "status":              status,
             "battery_level":       battery,
-            "brushing_duration":   duration_sec,  # seconds
+            "brushing_duration":   duration_sec,  # seconds — also exposed as brushing_duration_sec
             "deep_clean":          bool(payload[15]),
             "anti_splash":         bool(payload[16]),
             "power_ramp_up":       bool(payload[24]),
@@ -732,7 +736,10 @@ class Laifen:
             "active_strength": prev.get("active_strength", prev.get(f"m{prev.get('mode_index', 0) + 1}_strength", 5)),
             "active_range":    prev.get("active_range",    prev.get(f"m{prev.get('mode_index', 0) + 1}_range", 5)),
             "active_speed":    prev.get("active_speed",    prev.get(f"m{prev.get('mode_index', 0) + 1}_speed", 5)),
-            "brushing_duration_index": prev.get("brushing_duration_index", 0),
+            # brushing_duration_sec: sourced from p5. The slider writes it
+            # optimistically so the UI updates immediately; the next status
+            # packet from the device will confirm or correct it.
+            "brushing_duration_sec": duration_sec,
             # Real-time pressure flag — updated by 0x0C telemetry packets at
             # ~100ms during brushing. Must survive the full-status dict replacement.
             "over_pressure_active": prev.get("over_pressure_active", False),
@@ -944,20 +951,44 @@ class Laifen:
             return False
         return await self.send_command(build_v2pro_command(0x0208, [0x01 if enabled else 0x00]))
 
-    async def set_brushing_duration(self, value: int) -> bool:
+    async def set_brushing_duration(self, value: int, mode: int | None = None) -> bool:
         """
-        CMD_TB_BRUSHING_TIME=0x200 (setBrushingTime), LEN=1.
+        CMD_TB_BRUSHING_TIME=0x200 (setBrushingTime).
 
-        UNCONFIRMED format: value is an index 0-8, representing 1-5 minutes
-        in 0.5-minute steps (index 0 = 1 min, index 8 = 5 min). Readback:
-        p5 (seconds) — but the relationship between this index and p5's raw
-        seconds value hasn't been verified yet.
+        Confirmed via HCI snoop capture of the Laifen app. The command format is:
+
+            AA 02 00 00 00 03 [mode] [dur_hi] [dur_lo] [xor_cs]
+
+        - LEN = 3
+        - payload[0] = mode index (0-3, one of the four brushing modes)
+        - payload[1:3] = duration in seconds, BIG-ENDIAN 16-bit
+          (note: the status packet reports duration little-endian, but the
+           command uses big-endian — they differ)
+
+        The app sends four separate commands (one per mode 0-3) to set the
+        same duration across all modes. We replicate that by default so the
+        duration applies regardless of which mode is active. If `mode` is
+        given, only that mode is set.
+
+        Range 60-300 seconds (1-5 min) in 30-second steps, matching the app.
         """
         if self._proto_version != "v2pro":
             _LOGGER.debug(f"[{self.address}] set_brushing_duration: not implemented for {self._proto_version}")
             return False
-        value = max(0, min(8, int(value)))
-        return await self.send_command(build_v2pro_command(0x0200, [value]))
+
+        seconds = max(60, min(300, int(round(value / 30) * 30)))
+        hi = (seconds >> 8) & 0xFF
+        lo = seconds & 0xFF
+
+        modes = [mode] if mode is not None else [0, 1, 2, 3]
+        ok = True
+        for m in modes:
+            cmd = build_v2pro_command(0x0200, [m & 0xFF, hi, lo])
+            result = await self.send_command(cmd)
+            ok = ok and result
+            # Small gap between the per-mode writes, mirroring the app
+            await asyncio.sleep(0.15)
+        return ok
 
     async def set_over_pressure_level(self, level: str) -> bool:
         """
