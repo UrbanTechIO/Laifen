@@ -185,24 +185,23 @@ class LaifenOscillationSpeed(CoordinatorEntity, NumberEntity):
 
 class LaifenBrushingDuration(CoordinatorEntity, NumberEntity):
     """
-    Brushing Duration adjustment (Wave Pro).
+    Brushing Duration adjustment (Wave Pro / V2 Pro only).
 
-    UNCONFIRMED: device command (CMD_TB_BRUSHING_TIME=0x200) takes an index
-    0-8, presumed to represent 1-5 minutes in 0.5-minute steps (index 0 =
-    1 min, index 8 = 5 min). Displayed here directly in minutes for a more
-    intuitive slider; converted to the 0-8 index internally.
-    The relationship between this index and the raw seconds value reported
-    in the status packet (p5) hasn't been verified, so the displayed value
-    is optimistic-only (last value sent from HA), not read back from the
-    device.
+    Confirmed via APK decompile: the device expects duration in SECONDS,
+    range 30-300 in 30-second steps. Displayed in minutes (0.5-5 min,
+    step 0.5) for a user-friendly slider. Conversion to seconds happens
+    internally before sending the command.
+
+    native_value is stored optimistically on set and updated from p5
+    (brushing_duration_sec) when a status packet arrives.
     """
 
     _attr_has_entity_name = True
     _attr_should_poll     = False
     _attr_mode            = NumberMode.SLIDER
     _attr_native_step     = 0.5
-    _attr_native_min_value = 1
-    _attr_native_max_value = 5
+    _attr_native_min_value = 1.0
+    _attr_native_max_value = 5.0
     _attr_native_unit_of_measurement = "min"
 
     def __init__(self, device, coordinator):
@@ -219,19 +218,23 @@ class LaifenBrushingDuration(CoordinatorEntity, NumberEntity):
 
     @property
     def native_value(self) -> float | None:
-        index = (self.device.result or {}).get("brushing_duration_index", 0)
-        return 1 + index * 0.5
+        # p5 in the status packet is the duration in seconds — convert to minutes
+        sec = (self.device.result or {}).get("brushing_duration_sec")
+        if sec is None:
+            return None
+        return round(sec / 60, 1)
 
     async def async_set_native_value(self, value: float) -> None:
-        # value is 1-5 min in 0.5 steps -> index 0-8
-        int_val = max(0, min(8, int(round((value - 1) * 2))))
-        success = await self.device.set_brushing_duration(int_val)
+        # value is in minutes (0.5 step) — convert to seconds and round to 30s step
+        seconds = max(60, min(300, int(round(value * 60 / 30) * 30)))
+        success = await self.device.set_brushing_duration(seconds)
         if success:
             if self.device.result is not None:
-                self.device.result["brushing_duration_index"] = int_val
+                # Store optimistically in seconds so native_value reflects it immediately
+                self.device.result["brushing_duration_sec"] = seconds
             self.coordinator.async_set_updated_data(self.device.result)
         else:
-            _LOGGER.warning(f"Failed to set brushing duration to index {int_val}")
+            _LOGGER.warning(f"Failed to set brushing duration to {seconds}s")
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
