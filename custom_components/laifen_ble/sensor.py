@@ -29,7 +29,6 @@ class LaifenSensor(CoordinatorEntity, RestoreEntity, SensorEntity):
         self.entity_description = description
         self.device = device
         self._attr_unique_id = f"{device.address}_{description.key}"
-        self._attr_name = description.name
         self._last_valid_value = None
         self._timer_task = None
         self._timer_state = 0

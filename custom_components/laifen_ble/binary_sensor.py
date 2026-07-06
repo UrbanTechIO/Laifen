@@ -29,12 +29,12 @@ class LaifenBinarySensor(CoordinatorEntity, BinarySensorEntity):
     _attr_has_entity_name = True
     _attr_should_poll     = False
 
-    def __init__(self, device, coordinator, key: str, name: str, icon: str):
+    def __init__(self, device, coordinator, key: str, icon: str):
         super().__init__(coordinator)
         self.device = device
         self._key = key
         self._attr_unique_id  = f"{device.address}_{key}"
-        self._attr_name       = name
+        self._attr_translation_key = key
         self._attr_icon       = icon
         self._attr_device_info = laifen_device_info(device)
 
@@ -82,7 +82,7 @@ class LaifenConnectionSensor(CoordinatorEntity, BinarySensorEntity):
         super().__init__(coordinator)
         self.device = device
         self._attr_unique_id   = f"{device.address}_connection"
-        self._attr_name        = "Connection"
+        self._attr_translation_key = "connection"
         self._attr_device_info = laifen_device_info(device)
 
     @property
@@ -101,15 +101,15 @@ class LaifenConnectionSensor(CoordinatorEntity, BinarySensorEntity):
         self.async_on_remove(self.coordinator.async_add_listener(self.async_write_ha_state))
 
 
-# (key, name, icon)
+# (key, icon) — key doubles as the translation_key; names live in translations/
 WAVE_PRO_BINARY_SENSORS = [
-    ("deep_clean",         "Deep Clean",            "mdi:shimmer"),
-    ("anti_splash",        "Anti-Splash",           "mdi:water-off"),
-    ("power_ramp_up",      "3s Power Ramp-Up",      "mdi:chart-line-variant"),
-    ("quick_spin_dry",     "Quick Spin-dry Mode",   "mdi:fan"),
-    ("over_pressure",      "Over Pressure",         "mdi:gauge-full"),
-    ("bristle_protection", "Bristle Protection",    "mdi:shield-check"),
-    ("lift_to_wake",       "Lift to Wake Reminder", "mdi:hand-back-right"),
+    ("deep_clean",         "mdi:shimmer"),
+    ("anti_splash",        "mdi:water-off"),
+    ("power_ramp_up",      "mdi:chart-line-variant"),
+    ("quick_spin_dry",     "mdi:fan"),
+    ("over_pressure",      "mdi:gauge-full"),
+    ("bristle_protection", "mdi:shield-check"),
+    ("lift_to_wake",       "mdi:hand-back-right"),
 ]
 
 
@@ -133,7 +133,7 @@ class LaifenOverPressureActiveSensor(CoordinatorEntity, BinarySensorEntity):
         super().__init__(coordinator)
         self.device = device
         self._attr_unique_id  = f"{device.address}_over_pressure_active"
-        self._attr_name       = "Pressing Too Hard"
+        self._attr_translation_key = "over_pressure_active"
         self._attr_icon       = "mdi:hand-back-right-outline"
         self._attr_device_info = laifen_device_info(device)
 
@@ -168,9 +168,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
             entities.append(
                 LaifenConnectionSensor(data.device, data.coordinator)
             )
-            for key, name, icon in WAVE_PRO_BINARY_SENSORS:
+            for key, icon in WAVE_PRO_BINARY_SENSORS:
                 entities.append(
-                    LaifenBinarySensor(data.device, data.coordinator, key, name, icon)
+                    LaifenBinarySensor(data.device, data.coordinator, key, icon)
                 )
             entities.append(
                 LaifenOverPressureActiveSensor(data.device, data.coordinator)

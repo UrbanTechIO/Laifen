@@ -36,7 +36,7 @@ class LaifenVibrationStrength(CoordinatorEntity, NumberEntity):
         super().__init__(coordinator)
         self.device = device
         self._attr_unique_id  = f"{device.address}_vibration_strength"
-        self._attr_name       = "Vibration Strength"
+        self._attr_translation_key = "vibration_strength"
         self._attr_icon       = "mdi:sine-wave"
         self._attr_device_info = laifen_device_info(device)
 
@@ -102,7 +102,7 @@ class LaifenOscillationRange(CoordinatorEntity, NumberEntity):
         super().__init__(coordinator)
         self.device = device
         self._attr_unique_id  = f"{device.address}_oscillation_range"
-        self._attr_name       = "Oscillation Range"
+        self._attr_translation_key = "oscillation_range"
         self._attr_icon       = "mdi:arrow-oscillating"
         self._attr_device_info = laifen_device_info(device)
 
@@ -151,7 +151,7 @@ class LaifenOscillationSpeed(CoordinatorEntity, NumberEntity):
         super().__init__(coordinator)
         self.device = device
         self._attr_unique_id  = f"{device.address}_oscillation_speed"
-        self._attr_name       = "Oscillation Speed"
+        self._attr_translation_key = "oscillation_speed"
         self._attr_icon       = "mdi:speedometer"
         self._attr_device_info = laifen_device_info(device)
 
@@ -208,7 +208,7 @@ class LaifenBrushingDuration(CoordinatorEntity, NumberEntity):
         super().__init__(coordinator)
         self.device = device
         self._attr_unique_id  = f"{device.address}_brushing_duration"
-        self._attr_name       = "Brushing Duration Adjustment"
+        self._attr_translation_key = "brushing_duration"
         self._attr_icon       = "mdi:timer-plus-outline"
         self._attr_device_info = laifen_device_info(device)
 

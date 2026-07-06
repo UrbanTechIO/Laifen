@@ -1,19 +1,161 @@
 {
-    "config": {
-        "abort": {
-            "already_configured": "Device is already configured"
-        },
-        "error": {
-            "cannot_connect": "Failed to connect",
-            "invalid_auth": "Invalid authentication",
-            "unknown": "Unexpected error"
-        },
-        "step": {
-            "user": {
-                "data": {
-                    "mac": "Mac Address"
-                }
-            }
+  "config": {
+    "abort": {
+      "already_configured": "Device is already configured"
+    },
+    "error": {
+      "cannot_connect": "Failed to connect",
+      "invalid_auth": "Invalid authentication",
+      "unknown": "Unexpected error"
+    },
+    "step": {
+      "user": {
+        "data": {
+          "mac": "MAC Address"
         }
+      }
     }
+  },
+  "entity": {
+    "sensor": {
+      "status": {
+        "name": "Status",
+        "state": {
+          "Running": "Running",
+          "Idle": "Idle",
+          "Unknown": "Unknown"
+        }
+      },
+      "mode": {
+        "name": "Mode",
+        "state": {
+          "1": "Mode 1",
+          "2": "Mode 2",
+          "3": "Mode 3",
+          "4": "Mode 4"
+        }
+      },
+      "battery_level": {
+        "name": "Battery Level"
+      },
+      "brushing_time": {
+        "name": "Brushing Time"
+      },
+      "timer": {
+        "name": "Timer"
+      },
+      "active_strength": {
+        "name": "Strength"
+      },
+      "active_range": {
+        "name": "Range"
+      },
+      "active_speed": {
+        "name": "Speed"
+      },
+      "brushing_duration": {
+        "name": "Brushing Duration"
+      },
+      "over_pressure_level": {
+        "name": "Over Pressure Level",
+        "state": {
+          "Light": "Light",
+          "Medium": "Medium",
+          "Hard": "Hard",
+          "Unknown": "Unknown"
+        }
+      }
+    },
+    "binary_sensor": {
+      "connection": {
+        "name": "Connection"
+      },
+      "deep_clean": {
+        "name": "Deep Clean"
+      },
+      "anti_splash": {
+        "name": "Anti-Splash"
+      },
+      "power_ramp_up": {
+        "name": "3s Power Ramp-Up"
+      },
+      "quick_spin_dry": {
+        "name": "Quick Spin-dry Mode"
+      },
+      "over_pressure": {
+        "name": "Over Pressure"
+      },
+      "bristle_protection": {
+        "name": "Bristle Protection"
+      },
+      "lift_to_wake": {
+        "name": "Lift to Wake Reminder"
+      },
+      "over_pressure_active": {
+        "name": "Pressing Too Hard"
+      }
+    },
+    "switch": {
+      "power": {
+        "name": "Power"
+      },
+      "high_frequency": {
+        "name": "High Frequency"
+      },
+      "airplane": {
+        "name": "Airplane"
+      },
+      "reminder_30s": {
+        "name": "30s Reminder"
+      },
+      "deep_clean": {
+        "name": "Deep Clean"
+      },
+      "anti_splash": {
+        "name": "Anti-Splash"
+      },
+      "power_ramp_up": {
+        "name": "3s Power Ramp-Up"
+      },
+      "bristle_protection": {
+        "name": "Bristle Protection"
+      },
+      "lift_to_wake": {
+        "name": "Lift to Wake Reminder"
+      }
+    },
+    "select": {
+      "mode": {
+        "name": "Mode",
+        "state": {
+          "Mode 1": "Mode 1",
+          "Mode 2": "Mode 2",
+          "Mode 3": "Mode 3",
+          "Mode 4": "Mode 4"
+        }
+      },
+      "over_pressure_level": {
+        "name": "Over Pressure Level",
+        "state": {
+          "Light": "Light",
+          "Medium": "Medium",
+          "Hard": "Hard"
+        }
+      }
+    },
+    "number": {
+      "vibration_strength": {
+        "name": "Vibration Strength"
+      },
+      "oscillation_range": {
+        "name": "Oscillation Range"
+      },
+      "oscillation_speed": {
+        "name": "Oscillation Speed"
+      },
+      "brushing_duration": {
+        "name": "Brushing Duration Adjustment"
+      }
+    }
+  }
 }
