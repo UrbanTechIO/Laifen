@@ -1,0 +1,161 @@
+{
+  "config": {
+    "abort": {
+      "already_configured": "Gerät ist bereits konfiguriert"
+    },
+    "error": {
+      "cannot_connect": "Verbindung fehlgeschlagen",
+      "invalid_auth": "Ungültige Authentifizierung",
+      "unknown": "Unerwarteter Fehler"
+    },
+    "step": {
+      "user": {
+        "data": {
+          "mac": "MAC-Adresse"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "status": {
+        "name": "Status",
+        "state": {
+          "Running": "Läuft",
+          "Idle": "Inaktiv",
+          "Unknown": "Unbekannt"
+        }
+      },
+      "mode": {
+        "name": "Modus",
+        "state": {
+          "1": "Modus 1",
+          "2": "Modus 2",
+          "3": "Modus 3",
+          "4": "Modus 4"
+        }
+      },
+      "battery_level": {
+        "name": "Batteriestand"
+      },
+      "brushing_time": {
+        "name": "Putzzeit"
+      },
+      "timer": {
+        "name": "Timer"
+      },
+      "active_strength": {
+        "name": "Stärke"
+      },
+      "active_range": {
+        "name": "Schwingungsbereich"
+      },
+      "active_speed": {
+        "name": "Geschwindigkeit"
+      },
+      "brushing_duration": {
+        "name": "Putzdauer"
+      },
+      "over_pressure_level": {
+        "name": "Anpressdruck-Stufe",
+        "state": {
+          "Light": "Leicht",
+          "Medium": "Mittel",
+          "Hard": "Stark",
+          "Unknown": "Unbekannt"
+        }
+      }
+    },
+    "binary_sensor": {
+      "connection": {
+        "name": "Verbindung"
+      },
+      "deep_clean": {
+        "name": "Tiefenreinigung"
+      },
+      "anti_splash": {
+        "name": "Spritzschutz"
+      },
+      "power_ramp_up": {
+        "name": "Sanftanlauf (3 s)"
+      },
+      "quick_spin_dry": {
+        "name": "Schnelltrocknung"
+      },
+      "over_pressure": {
+        "name": "Anpressdruck-Erkennung"
+      },
+      "bristle_protection": {
+        "name": "Borstenschutz"
+      },
+      "lift_to_wake": {
+        "name": "Aufwecken beim Anheben"
+      },
+      "over_pressure_active": {
+        "name": "Zu starker Druck"
+      }
+    },
+    "switch": {
+      "power": {
+        "name": "Ein/Aus"
+      },
+      "high_frequency": {
+        "name": "Hochfrequenz"
+      },
+      "airplane": {
+        "name": "Flugmodus"
+      },
+      "reminder_30s": {
+        "name": "30-Sekunden-Erinnerung"
+      },
+      "deep_clean": {
+        "name": "Tiefenreinigung"
+      },
+      "anti_splash": {
+        "name": "Spritzschutz"
+      },
+      "power_ramp_up": {
+        "name": "Sanftanlauf (3 s)"
+      },
+      "bristle_protection": {
+        "name": "Borstenschutz"
+      },
+      "lift_to_wake": {
+        "name": "Aufwecken beim Anheben"
+      }
+    },
+    "select": {
+      "mode": {
+        "name": "Modus",
+        "state": {
+          "Mode 1": "Modus 1",
+          "Mode 2": "Modus 2",
+          "Mode 3": "Modus 3",
+          "Mode 4": "Modus 4"
+        }
+      },
+      "over_pressure_level": {
+        "name": "Anpressdruck-Stufe",
+        "state": {
+          "Light": "Leicht",
+          "Medium": "Mittel",
+          "Hard": "Stark"
+        }
+      }
+    },
+    "number": {
+      "vibration_strength": {
+        "name": "Vibrationsstärke"
+      },
+      "oscillation_range": {
+        "name": "Schwingungsbereich"
+      },
+      "oscillation_speed": {
+        "name": "Schwingungsgeschwindigkeit"
+      },
+      "brushing_duration": {
+        "name": "Putzdauer einstellen"
+      }
+    }
+  }
+}

@@ -29,7 +29,7 @@ class LaifenModeSelect(CoordinatorEntity, SelectEntity):
         super().__init__(coordinator)
         self.device = device
         self._attr_unique_id  = f"{device.address}_mode_select"
-        self._attr_name       = "Mode"
+        self._attr_translation_key = "mode"
         self._attr_icon       = "mdi:view-list"
         self._attr_device_info = {
             "identifiers": {(DOMAIN, device.address)},
@@ -165,7 +165,7 @@ class LaifenOverPressureLevelSelect(CoordinatorEntity, SelectEntity):
         super().__init__(coordinator)
         self.device = device
         self._attr_unique_id  = f"{device.address}_over_pressure_level_select"
-        self._attr_name       = "Over Pressure Level"
+        self._attr_translation_key = "over_pressure_level"
         self._attr_icon       = "mdi:gauge"
         self._attr_device_info = laifen_device_info(device)
 

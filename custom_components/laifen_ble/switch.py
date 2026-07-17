@@ -22,7 +22,7 @@ class LaifenPowerSwitch(CoordinatorEntity, SwitchEntity):
         super().__init__(coordinator)
         self.device = device
         self._attr_unique_id  = f"{device.address}_power"
-        self._attr_name       = "Power"
+        self._attr_translation_key = "power"
         self._attr_icon       = "mdi:toothbrush-electric"
         self._attr_device_info = laifen_device_info(device)
 
@@ -61,7 +61,7 @@ class LaifenHighFrequencySwitch(CoordinatorEntity, SwitchEntity):
         super().__init__(coordinator)
         self.device = device
         self._attr_unique_id  = f"{device.address}_high_frequency"
-        self._attr_name       = "High Frequency"
+        self._attr_translation_key = "high_frequency"
         self._attr_icon       = "mdi:sine-wave"
         self._attr_device_info = laifen_device_info(device)
 
@@ -109,7 +109,7 @@ class LaifenAirplaneSwitch(CoordinatorEntity, SwitchEntity):
         super().__init__(coordinator)
         self.device = device
         self._attr_unique_id  = f"{device.address}_airplane"
-        self._attr_name       = "Airplane"
+        self._attr_translation_key = "airplane"
         self._attr_icon       = "mdi:airplane"
         self._attr_device_info = laifen_device_info(device)
 
@@ -144,7 +144,7 @@ class LaifenReminderSwitch(CoordinatorEntity, SwitchEntity):
         super().__init__(coordinator)
         self.device = device
         self._attr_unique_id  = f"{device.address}_reminder_30s"
-        self._attr_name       = "30s Reminder"
+        self._attr_translation_key = "reminder_30s"
         self._attr_icon       = "mdi:timer-alert"
         self._attr_device_info = laifen_device_info(device)
 
@@ -179,7 +179,7 @@ class LaifenDeepCleanSwitch(CoordinatorEntity, SwitchEntity):
         super().__init__(coordinator)
         self.device = device
         self._attr_unique_id  = f"{device.address}_deep_clean"
-        self._attr_name       = "Deep Clean"
+        self._attr_translation_key = "deep_clean"
         self._attr_icon       = "mdi:toothbrush"
         self._attr_device_info = laifen_device_info(device)
 
@@ -224,7 +224,7 @@ class LaifenAntiSplashSwitch(CoordinatorEntity, SwitchEntity):
         super().__init__(coordinator)
         self.device = device
         self._attr_unique_id  = f"{device.address}_anti_splash"
-        self._attr_name       = "Anti-Splash"
+        self._attr_translation_key = "anti_splash"
         self._attr_icon       = "mdi:water-off"
         self._attr_device_info = laifen_device_info(device)
 
@@ -259,7 +259,7 @@ class LaifenPowerRampUpSwitch(CoordinatorEntity, SwitchEntity):
         super().__init__(coordinator)
         self.device = device
         self._attr_unique_id  = f"{device.address}_power_ramp_up"
-        self._attr_name       = "3s Power Ramp-Up"
+        self._attr_translation_key = "power_ramp_up"
         self._attr_icon       = "mdi:chart-line"
         self._attr_device_info = laifen_device_info(device)
 
@@ -294,7 +294,7 @@ class LaifenBristleProtectionSwitch(CoordinatorEntity, SwitchEntity):
         super().__init__(coordinator)
         self.device = device
         self._attr_unique_id  = f"{device.address}_bristle_protection"
-        self._attr_name       = "Bristle Protection"
+        self._attr_translation_key = "bristle_protection"
         self._attr_icon       = "mdi:shield-check"
         self._attr_device_info = laifen_device_info(device)
 
@@ -329,7 +329,7 @@ class LaifenLiftToWakeSwitch(CoordinatorEntity, SwitchEntity):
         super().__init__(coordinator)
         self.device = device
         self._attr_unique_id  = f"{device.address}_lift_to_wake"
-        self._attr_name       = "Lift to Wake Reminder"
+        self._attr_translation_key = "lift_to_wake"
         self._attr_icon       = "mdi:hand-wave"
         self._attr_device_info = laifen_device_info(device)
 
