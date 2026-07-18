@@ -2,26 +2,49 @@
 
 **Custom Integration for Laifen Devices in Home Assistant**
 
-This custom integration adds support for Laifen BLE toothbrushes, such as the **Laifen Wave**, in Home Assistant.
+This custom integration adds support for Laifen BLE toothbrushes — the **Laifen Wave** and the **Laifen Wave Pro** — in Home Assistant.
 
 ## Features
 
-Once configured, the integration provides the following entities:
+Once configured, the integration provides the following entities. Entities marked **(Wave Pro)** are only created for the Wave Pro.
 
 ### Sensors
 
-- **Status Sensor** – Shows the current device status (e.g., idle, brushing)
-- **Selected Mode** – Displays the active brushing mode
-- **Vibration Strength** – Intensity level of the current mode
-- **Oscillation Speed** – Speed of oscillation for the current mode
-- **Oscillation Range** – Oscillation angle range of the current mode
+- **Status** – Shows the current device status (e.g., idle, brushing)
+- **Mode** – Displays the active brushing mode
+- **Strength / Speed / Range** – Active vibration strength, oscillation speed, and oscillation range of the current mode
 - **Battery Level** – Current battery charge of the toothbrush
-- **Brushing Time Setting** – The configured duration for brushing before auto shutoff
-- **Active Timer** – Displays how long the toothbrush has been running during a session
+- **Brushing Time** – The configured duration for brushing before auto shutoff
+- **Timer** – Displays how long the toothbrush has been running during a session
+- **Brushing Duration** – Configured session length **(Wave Pro)**
+- **Over Pressure Level** – Current pressure sensitivity setting **(Wave Pro)**
+
+### Controls
+
+- **Mode** – Select the brushing mode (Mode 1–3, plus Mode 4 when High Frequency is enabled)
+- **Vibration Strength** – 1–10 per mode (up to 20 in Mode 4)
+- **Oscillation Speed** – 1–10 per mode
+- **Oscillation Range** – 1–10 per mode
+- **Over Pressure Level** – Pressure sensitivity: Light / Medium / Hard **(Wave Pro)**
+- **Brushing Duration Adjustment** – Session length in minutes **(Wave Pro)**
 
 ### Switches
 
-- **Power Control** – Allows turning the device on or off via Home Assistant
+- **Power** – Turn the brush motor on or off
+- **High Frequency** – Enables Mode 4 and extends strength range
+- **Airplane** – Locks the physical button for travel
+- **30s Reminder** – 30-second brushing pacer
+- **Deep Clean** – Deep clean mode (must be off to use High Frequency) **(Wave Pro)**
+- **Anti-Splash** **(Wave Pro)**
+- **3s Power Ramp-Up** – Gentle power ramp on start **(Wave Pro)**
+- **Bristle Protection** **(Wave Pro)**
+- **Lift to Wake Reminder** **(Wave Pro)**
+
+### Binary Sensors
+
+- **Connection** – BLE connection status
+- **Pressing Too Hard** – Real-time over-pressure warning while brushing **(Wave Pro)**
+- **Feature status** – Read-only state of Deep Clean, Anti-Splash, 3s Power Ramp-Up, Quick Spin-dry Mode, Over Pressure, Bristle Protection, and Lift to Wake Reminder **(Wave Pro)**
 
 ## Companion Dashboard Card
 
