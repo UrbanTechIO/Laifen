@@ -23,6 +23,16 @@ Once configured, the integration provides the following entities:
 
 - **Power Control** – Allows turning the device on or off via Home Assistant
 
+## Companion Dashboard Card
+
+There is an official companion Lovelace card for this integration: **[Laifen Card](https://github.com/UrbanTechIO/laifen-card)**.
+
+A frosted-glass card with a live brushing timer ring, mode/strength/speed/range controls, feature toggles, and Wave Pro extras (pressure sensitivity, duration, over-pressure warning) — with a full UI editor and automatic entity discovery. Install it via HACS by adding `https://github.com/UrbanTechIO/laifen-card` as a custom repository (category **Dashboard**).
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/UrbanTechIO/laifen-card/main/img/screenshot.jpg" alt="Laifen Card" width="300"/>
+</p>
+
 ## Device Discovery
 
 The integration automatically scans for nearby Laifen devices over Bluetooth.  
