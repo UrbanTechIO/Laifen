@@ -8,6 +8,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN, MODE_OPTIONS_BASE, MODE_OPTIONS_HF, OVER_PRESSURE_LEVEL_OPTIONS
 from .models import LaifenData, DEVICE_REGISTRY, laifen_device_info
+from .laifen.laifen import build_v1_settings
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -69,22 +70,23 @@ class LaifenModeSelect(CoordinatorEntity, SelectEntity):
 
     async def async_select_option(self, option: str) -> None:
         """
-        Select a mode and immediately re-write that mode's cached slider
-        values. This mirrors what the Laifen app does: after sending the
-        mode-select command (which has a side effect of writing its checksum
-        into the target mode's strength byte), the app immediately sends
-        the correct strength/range/speed to overwrite the garbage.
+        Select a mode.
+
+        V1: CONFIRMED via three HCI snoop captures (2026-08-09) — the app
+        switches modes purely by sending the combined settings command
+        (build_v1_settings) with the new mode's group byte and that mode's
+        strength/range/speed. There is no separate mode-select command.
+        Sending settings with an out-of-range value for the target mode
+        (e.g. Mode 4 needs strength 11-20, not 1-10) causes the device to
+        reject the write and revert to another mode — this was the cause of
+        "selecting Mode 4 reverts to Mode 1".
+
+        V2 Pro: switchMode has no known side effects; send it directly.
         """
         try:
             mode_index = int(option.split()[-1]) - 1
         except (ValueError, IndexError):
             _LOGGER.warning(f"Invalid mode option: {option}")
-            return
-
-        # Step 1: send mode-select
-        success = await self.device.set_mode(mode_index)
-        if not success:
-            _LOGGER.warning(f"Failed to send mode-select for {option}")
             return
 
         base = f"m{mode_index + 1}"
@@ -93,24 +95,28 @@ class LaifenModeSelect(CoordinatorEntity, SelectEntity):
         rng      = result.get(f"{base}_range",    5)
         speed    = result.get(f"{base}_speed",    5)
 
-        if self.device._proto_version == "v2pro":
-            # V2 Pro's switchMode (LEN=1) has no known corruption side
-            # effect to fix up — just update HA state to reflect the new
-            # mode and its cached slider values.
-            strength = max(1, min(int(strength), 20 if mode_index == 3 else 10))
-            rng      = max(1, min(int(rng),   10))
-            speed    = max(1, min(int(speed), 10))
+        # Mode 4 (index 3) uses the extended 11-20 strength range; all other
+        # modes use 1-10.
+        if mode_index == 3:
+            strength = max(11, min(int(strength), 20))
         else:
-            # Step 2 (V1 only): immediately re-write the correct slider
-            # values for this mode to overwrite the checksum corruption
-            # the mode-select command caused.
-            strength = max(1, min(int(strength), 20 if mode_index == 3 else 10))
-            rng      = max(1, min(int(rng),  10))
-            speed    = max(1, min(int(speed), 10))
+            strength = max(1, min(int(strength), 10))
+        rng   = max(1, min(int(rng),   10))
+        speed = max(1, min(int(speed), 10))
 
-            await self.device.set_vibration_strength(strength)
-            await self.device.set_oscillation_range(rng)
-            await self.device.set_oscillation_speed(speed)
+        if self.device._proto_version == "v2pro":
+            success = await self.device.set_mode(mode_index)
+            if not success:
+                _LOGGER.warning(f"Failed to send mode-select for {option}")
+                return
+        else:
+            # V1: one combined write does the mode switch AND sets values.
+            success = await self.device.send_command(
+                build_v1_settings(mode_index, strength, rng, speed)
+            )
+            if not success:
+                _LOGGER.warning(f"Failed to switch to {option}")
+                return
 
         # Update HA state
         self.device._current_mode_index = mode_index
@@ -202,7 +208,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
             data = hass.data[DOMAIN][entry.entry_id].get(address)
         if isinstance(data, LaifenData):
             entities.append(LaifenModeSelect(data.device, data.coordinator))
-            entities.append(LaifenOverPressureLevelSelect(data.device, data.coordinator))
+            # Over-pressure level select is V2 Pro-only.
+            if not data.device.is_v1_device:
+                entities.append(LaifenOverPressureLevelSelect(data.device, data.coordinator))
 
     if entities:
         async_add_entities(entities)

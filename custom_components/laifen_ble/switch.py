@@ -368,12 +368,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
                 LaifenHighFrequencySwitch(data.device, data.coordinator),
                 LaifenAirplaneSwitch(data.device, data.coordinator),
                 LaifenReminderSwitch(data.device, data.coordinator),
-                LaifenDeepCleanSwitch(data.device, data.coordinator),
-                LaifenAntiSplashSwitch(data.device, data.coordinator),
-                LaifenPowerRampUpSwitch(data.device, data.coordinator),
-                LaifenBristleProtectionSwitch(data.device, data.coordinator),
-                LaifenLiftToWakeSwitch(data.device, data.coordinator),
             ]
+            # V2 Pro-only switches — not present on V1 (LFTB01) hardware.
+            if not data.device.is_v1_device:
+                entities += [
+                    LaifenDeepCleanSwitch(data.device, data.coordinator),
+                    LaifenAntiSplashSwitch(data.device, data.coordinator),
+                    LaifenPowerRampUpSwitch(data.device, data.coordinator),
+                    LaifenBristleProtectionSwitch(data.device, data.coordinator),
+                    LaifenLiftToWakeSwitch(data.device, data.coordinator),
+                ]
 
     if entities:
         async_add_entities(entities)

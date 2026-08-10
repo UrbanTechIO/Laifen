@@ -168,13 +168,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
             entities.append(
                 LaifenConnectionSensor(data.device, data.coordinator)
             )
-            for key, icon in WAVE_PRO_BINARY_SENSORS:
+            # Over-pressure telemetry is V2 Pro-only — not present on V1.
+            if not data.device.is_v1_device:
+                for key, icon in WAVE_PRO_BINARY_SENSORS:
+                    entities.append(
+                        LaifenBinarySensor(data.device, data.coordinator, key, icon)
+                    )
                 entities.append(
-                    LaifenBinarySensor(data.device, data.coordinator, key, icon)
+                    LaifenOverPressureActiveSensor(data.device, data.coordinator)
                 )
-            entities.append(
-                LaifenOverPressureActiveSensor(data.device, data.coordinator)
-            )
 
     if entities:
         async_add_entities(entities)

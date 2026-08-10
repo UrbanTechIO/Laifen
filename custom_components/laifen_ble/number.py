@@ -5,6 +5,7 @@ from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import (
     DOMAIN,
@@ -43,20 +44,26 @@ class LaifenVibrationStrength(CoordinatorEntity, NumberEntity):
     def _mode_index(self) -> int:
         return (self.device.result or {}).get("mode_index", 0)
 
-    def _hf_on(self) -> bool:
-        return bool((self.device.result or {}).get("high_frequency", False))
+    def _mode4_active(self) -> bool:
+        """Mode 4 (index 3) uses the extended 11-20 strength range.
 
-    def _hf_active(self) -> bool:
-        return self._mode_index() == 3 and self._hf_on()
+        CONFIRMED via HCI snoop capture (2026-08-09): on V1 the device
+        expects Mode 4 strength in 11-20 and rejects 1-10 values (causing a
+        revert to another mode). This is a property of Mode 4 itself, NOT of
+        the High Frequency flag — the extended range applies whenever Mode 4
+        is the active mode. (HF state is not even reported in the V1 status
+        packet, so it cannot be relied on to gate the range.)
+        """
+        return self._mode_index() == 3
 
     @property
     def native_min_value(self) -> float:
-        return STRENGTH_MIN_HF if self._hf_active() else STRENGTH_MIN
+        return STRENGTH_MIN_HF if self._mode4_active() else STRENGTH_MIN
 
     @property
     def native_max_value(self) -> float:
-        # Only Mode 4 (index 3) with HF on gets the extended range
-        if self._hf_active():
+        # Mode 4 (index 3) uses the extended 11-20 range; all other modes 1-10.
+        if self._mode4_active():
             return STRENGTH_MAX_HF
         return STRENGTH_MAX_NORMAL
 
@@ -183,17 +190,24 @@ class LaifenOscillationSpeed(CoordinatorEntity, NumberEntity):
         self.async_on_remove(self.coordinator.async_add_listener(self.async_write_ha_state))
 
 
-class LaifenBrushingDuration(CoordinatorEntity, NumberEntity):
+class LaifenBrushingDuration(CoordinatorEntity, RestoreEntity, NumberEntity):
     """
-    Brushing Duration adjustment (Wave Pro / V2 Pro only).
+    Brushing Duration adjustment.
 
-    Confirmed via APK decompile: the device expects duration in SECONDS,
-    range 30-300 in 30-second steps. Displayed in minutes (0.5-5 min,
-    step 0.5) for a user-friendly slider. Conversion to seconds happens
-    internally before sending the command.
+    V2 Pro: confirmed via APK decompile + HCI capture — AA 02 00 00 00 03
+      [mode][dur_hi][dur_lo] cs, sent once per mode (0-3).
+    V1: confirmed via HCI capture (2026-08-09) — AA 05 01 02 [dur_hi][dur_lo]
+      cs, a single global command (no per-mode looping).
 
-    native_value is stored optimistically on set and updated from p5
-    (brushing_duration_sec) when a status packet arrives.
+    Both use duration in SECONDS, range 60-300 in 30-second steps. Displayed
+    in minutes (1-5 min, step 0.5) for a user-friendly slider. Conversion to
+    seconds happens internally before sending the command.
+
+    Neither device reports duration back in its status packet, so it is
+    tracked optimistically: set on write, preserved across status parses
+    (see build_v1_settings-adjacent handling in laifen.py / _parse_v1), and
+    restored from HA's state store on startup so a fresh connection doesn't
+    show "Unknown" before the value has been set at least once this session.
     """
 
     _attr_has_entity_name = True
@@ -211,17 +225,22 @@ class LaifenBrushingDuration(CoordinatorEntity, NumberEntity):
         self._attr_translation_key = "brushing_duration"
         self._attr_icon       = "mdi:timer-plus-outline"
         self._attr_device_info = laifen_device_info(device)
+        self._restored_minutes: float | None = None
 
     @property
     def available(self) -> bool:
-        return self.device._proto_version == "v2pro"
+        return self.device._proto_version in ("v2pro", "v1") or self.device.is_v1_device
 
     @property
     def native_value(self) -> float | None:
         # p5 in the status packet is the duration in seconds — convert to minutes
         sec = (self.device.result or {}).get("brushing_duration_sec")
         if sec is None:
-            return None
+            # Device hasn't reported/been-set this session yet — fall back to
+            # the value restored from HA's last known state, if any, so the
+            # slider shows a real number instead of "Unknown" right after a
+            # reconnect or HA restart.
+            return self._restored_minutes
         return round(sec / 60, 1)
 
     async def async_set_native_value(self, value: float) -> None:
@@ -232,9 +251,25 @@ class LaifenBrushingDuration(CoordinatorEntity, NumberEntity):
             if self.device.result is not None:
                 # Store optimistically in seconds so native_value reflects it immediately
                 self.device.result["brushing_duration_sec"] = seconds
+            self._restored_minutes = round(seconds / 60, 1)
             self.coordinator.async_set_updated_data(self.device.result)
         else:
             _LOGGER.warning(f"Failed to set brushing duration to {seconds}s")
+
+    async def async_added_to_hass(self):
+        await super().async_added_to_hass()
+        self.async_on_remove(self.coordinator.async_add_listener(self.async_write_ha_state))
+
+        # Restore the last known value across HA restarts, so the slider
+        # doesn't show "Unknown" before this session's status/write happens.
+        last_state = await self.async_get_last_state()
+        if last_state and last_state.state not in (None, "unknown", "unavailable"):
+            try:
+                self._restored_minutes = float(last_state.state)
+            except ValueError:
+                _LOGGER.debug(
+                    f"Could not restore brushing duration state: {last_state.state}"
+                )
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
