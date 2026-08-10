@@ -66,6 +66,62 @@ def build_command(param: int, b3: int, value: int) -> bytes:
     return bytes(data)
 
 
+def build_v1_settings(mode_index: int, strength: int, range_: int, speed: int) -> bytes:
+    """
+    Build a V1 mode-settings command, CONFIRMED via HCI snoop capture of the
+    Laifen app (2026-08-09):
+
+        AA 04 01 04 [mode] [strength] [range] [speed] [xor_cs]   (9 bytes)
+
+    - [mode]     : 0-3, which mode's settings to write (0=Mode1 .. 3=Mode4)
+    - [strength] : vibration strength (1-10, or 1-20 on Mode 4)
+    - [range]    : oscillation range (1-10)
+    - [speed]    : oscillation speed (1-10)
+
+    All three values are sent TOGETHER in a single command — the device does
+    not accept individual per-setting writes. This is why the earlier
+    per-parameter approach (AA 04 [param] 01 [value]) failed and corrupted
+    multiple settings: the device expects the full 3-value payload with a
+    leading mode-group byte.
+    """
+    m = max(0, min(3, int(mode_index)))
+    # Mode 4 (index 3) uses the extended strength range 11-20; others 1-10.
+    # CONFIRMED via HCI capture: the device rejects out-of-range Mode 4
+    # strength (e.g. 1-10) and reverts to another mode.
+    if m == 3:
+        s = max(11, min(20, int(strength)))
+    else:
+        s = max(1, min(10, int(strength)))
+    r = max(1, min(10, int(range_)))
+    sp = max(1, min(10, int(speed)))
+    data = [0xAA, 0x04, 0x01, 0x04, m, s, r, sp]
+    cs = 0
+    for b in data:
+        cs ^= b
+    data.append(cs)
+    return bytes(data)
+
+
+def build_v1_duration(seconds: int) -> bytes:
+    """
+    Build a V1 brushing-duration command, CONFIRMED via HCI snoop capture of
+    the Laifen app (2026-08-09):
+
+        AA 05 01 02 [dur_hi] [dur_lo] [xor_cs]   (7 bytes)
+
+    Duration is a big-endian 16-bit value in SECONDS (same encoding as V2
+    Pro's duration command). Range 60-300s (1-5 min) in 30s steps, matching
+    the app's slider.
+    """
+    seconds = max(60, min(300, int(seconds)))
+    data = [0xAA, 0x05, 0x01, 0x02, (seconds >> 8) & 0xFF, seconds & 0xFF]
+    cs = 0
+    for b in data:
+        cs ^= b
+    data.append(cs)
+    return bytes(data)
+
+
 def build_v2pro_command(cmd: int, payload: list[int]) -> bytes:
     """
     Build a V2 Pro (Wave Pro / LFTB02-S-412B) write command.
@@ -101,6 +157,35 @@ class Laifen:
         self._reconnecting   = asyncio.Lock()
         self._proto_version  = None        # "v1" or "v2"
         self._brushing_active = False      # V2 only
+
+    @property
+    def is_v1_device(self) -> bool:
+        """True if this is a V1 (LFTB01) toothbrush.
+
+        Uses the confirmed protocol version once known; before the first
+        packet arrives, falls back to the BLE device name (LFTB01 prefix),
+        which is available immediately at setup. This lets entity platforms
+        hide V2-only entities on V1 hardware without waiting for a connection.
+        """
+        if self._proto_version == "v1":
+            return True
+        if self._proto_version in ("v2", "v2pro"):
+            return False
+        name = (self.name or "").upper()
+        return "LFTB01" in name
+
+    @property
+    def is_v2pro_device(self) -> bool:
+        """True if this is a V2 Pro (Wave Pro, LFTB02) toothbrush.
+
+        Uses the confirmed protocol version once known; before the first
+        packet, falls back to the BLE name (LFTB02 prefix)."""
+        if self._proto_version == "v2pro":
+            return True
+        if self._proto_version in ("v1", "v2"):
+            return False
+        name = (self.name or "").upper()
+        return "LFTB02" in name
 
         # ── State tracking ────────────────────────────────────────────────
         # mode_index: byte[4] echoes the last-written value for ANY command,
@@ -421,51 +506,72 @@ class Laifen:
             mode_index = data[4] if len(data) > 4 and 0 <= data[4] <= 3 else self._current_mode_index
             self._current_mode_index = mode_index
 
-            # Active mode values — bytes[5,6,7]
-            active_strength = data[5] if len(data) > 5 else 0
-            active_range    = data[6] if len(data) > 6 else 0
-            active_speed    = data[7] if len(data) > 7 else 0
-
-            # Per-mode stored values — bytes[8..16]
-            # Mode 1 is always in [5,6,7] (active), so we synthesise m1_* from those
-            # when mode 1 is active; otherwise preserve cached m1 from prior result.
             prev = self.result or {}
 
-            if mode_index == 0:
-                m1_str, m1_range, m1_speed = active_strength, active_range, active_speed
-            else:
-                m1_str   = prev.get("m1_strength", 0)
-                m1_range = prev.get("m1_range",    0)
-                m1_speed = prev.get("m1_speed",    0)
+            # Per-mode settings live in fixed 3-byte groups at bytes[5+3M ..]:
+            #   Mode 1 (index 0): [5,6,7]   Mode 2 (index 1): [8,9,10]
+            #   Mode 3 (index 2): [11,12,13] Mode 4 (index 3): [14,15,16]
+            # CONFIRMED via HCI snoop capture (2026-08-09). The ACTIVE mode's
+            # live values are read from THAT mode's slot — reading a fixed
+            # [5,6,7] was wrong: when a non-Mode-1 mode is active, [5,6,7]
+            # hold garbage (e.g. 0xAE 00 00), which clamped strength to 10.
+            def _slot(mode: int, key_prefix: str) -> tuple[int, int, int]:
+                base = 5 + 3 * mode
+                out = []
+                for i, suffix in enumerate(("strength", "range", "speed")):
+                    cached = prev.get(f"{key_prefix}_{suffix}", 0)
+                    if len(data) > base + i:
+                        v = data[base + i]
+                        # Valid values are 1-20; anything else is a garbage
+                        # byte from a non-active slot — keep the cached value.
+                        out.append(v if 1 <= v <= 20 else cached)
+                    else:
+                        out.append(cached)
+                return out[0], out[1], out[2]
 
-            # Modes 2/3/4 are directly readable from packet
-            m2_str   = data[8]  if len(data) > 8  else prev.get("m2_strength", 0)
-            m2_range = data[9]  if len(data) > 9  else prev.get("m2_range",    0)
-            m2_speed = data[10] if len(data) > 10 else prev.get("m2_speed",    0)
-            m3_str   = data[11] if len(data) > 11 else prev.get("m3_strength", 0)
-            m3_range = data[12] if len(data) > 12 else prev.get("m3_range",    0)
-            m3_speed = data[13] if len(data) > 13 else prev.get("m3_speed",    0)
-            m4_str   = data[14] if len(data) > 14 else prev.get("m4_strength", 0)
-            m4_range = data[15] if len(data) > 15 else prev.get("m4_range",    0)
-            m4_speed = data[16] if len(data) > 16 else prev.get("m4_speed",    0)
+            m1_str, m1_range, m1_speed = _slot(0, "m1")
+            m2_str, m2_range, m2_speed = _slot(1, "m2")
+            m3_str, m3_range, m3_speed = _slot(2, "m3")
+            m4_str, m4_range, m4_speed = _slot(3, "m4")
 
-            # When mode 2/3/4 is active, bytes[8..16] still hold ALL stored values
-            # but bytes[5,6,7] hold the live active ones. Keep stored values in sync
-            # for the active mode using the live bytes[5,6,7]:
-            if mode_index == 1:
-                m2_str, m2_range, m2_speed = active_strength, active_range, active_speed
-            elif mode_index == 2:
-                m3_str, m3_range, m3_speed = active_strength, active_range, active_speed
-            elif mode_index == 3:
-                m4_str, m4_range, m4_speed = active_strength, active_range, active_speed
+            # Active mode values = the active mode's own slot
+            _active_map = {
+                0: (m1_str, m1_range, m1_speed),
+                1: (m2_str, m2_range, m2_speed),
+                2: (m3_str, m3_range, m3_speed),
+                3: (m4_str, m4_range, m4_speed),
+            }
+            active_strength, active_range, active_speed = _active_map.get(
+                mode_index, (m1_str, m1_range, m1_speed)
+            )
 
-            # Feature flags
+
+            # Feature flags / status.
+            #
+            # This V1 device (LFTB01-P) sends a 20-byte status packet:
+            #   [17] = flag byte (0x00 observed; airplane candidate)
+            #   [18] = battery level (%)
+            #   [19] = trailing byte (0x01 observed)
+            # Older LFTB01 variants sent 26-byte packets with different tail
+            # offsets, so each field is read defensively by length.
+            #
+            # High Frequency state is NOT reported in the status packet on this
+            # device, so it is tracked optimistically (set by the HF switch)
+            # rather than parsed here — preserve whatever is cached.
             airplane_mode  = bool(data[17]) if len(data) > 17 else False
-            battery_level  = data[18]       if len(data) > 18 else 0
-            high_frequency = bool(data[22]) if len(data) > 22 else False
-
-            # Running status — byte[23] low nibble, confirmed from laifen_12
-            status = "Running" if (len(data) > 23 and data[23] == 0x01) else "Idle"
+            if len(data) >= 26:
+                # Legacy 26-byte layout (older LFTB01): battery [18], HF [22],
+                # running [23].
+                battery_level  = data[18]
+                high_frequency = bool(data[22]) if len(data) > 22 else prev.get("high_frequency", False)
+                status = "Running" if (len(data) > 23 and data[23] == 0x01) else "Idle"
+            else:
+                # 20-byte layout (LFTB01-P-*): battery [18]; HF not present.
+                battery_level  = data[18] if len(data) > 18 else prev.get("battery_level", 0)
+                high_frequency = prev.get("high_frequency", False)
+                # Running state is not distinguishable in this packet; keep the
+                # brushing flag tracked elsewhere (physical button / commands).
+                status = "Running" if self._brushing_active else "Idle"
 
             return {
                 "raw_data":           data_str,
@@ -473,7 +579,13 @@ class Laifen:
                 "mode":               str(mode_index + 1),
                 "mode_index":         mode_index,
                 "battery_level":      battery_level,
-                "brushing_time":      0,
+                # "brushing_time" intentionally omitted: this V1 device never
+                # reports it (the field only had meaning on an older,
+                # different protocol variant) and it was always hard-coded to
+                # 0 here, showing as a permanently-stuck "0" sensor. Omitting
+                # the key hides the sensor via sensor.py's existing
+                # key-presence gating. "Timer" (live session counter) and the
+                # new "Brushing Duration" slider cover the real use cases.
                 "vibration_strength": active_strength,
                 "oscillation_range":  active_range,
                 "oscillation_speed":  active_speed,
@@ -487,6 +599,12 @@ class Laifen:
                 "airplane_mode":      airplane_mode,
                 "high_frequency":     high_frequency,
                 "reminder_30s":       prev.get("reminder_30s", False),
+                # Duration is not reported in the V1 status packet — it is
+                # set optimistically by the Brushing Duration slider and must
+                # survive subsequent status parses (same pattern as
+                # reminder_30s/high_frequency above), otherwise it reverts to
+                # "Unknown" on the next status update / reconnect.
+                "brushing_duration_sec": prev.get("brushing_duration_sec"),
             }
         except Exception as e:
             _LOGGER.debug(f"V1 parse error: {e}")
@@ -765,10 +883,17 @@ class Laifen:
         """
         Select a brushing mode.
 
-        V1 (LFTB01): mode-select command (param=0x01, b3=0x01).
-          Side effect: overwrites target mode's strength byte with checksum.
-          Caller must immediately re-write strength/range/speed to fix this
-          (handled in select.py for V1 devices).
+        V1 (LFTB01): there is NO separate mode-select command. CONFIRMED via
+          three separate HCI snoop captures (2026-08-09): every mode switch
+          in the app happens purely by sending the combined settings command
+          (AA 04 01 04 [mode][str][rng][spd] cs, see build_v1_settings) with
+          the new mode's group byte — the device's active mode follows that
+          byte directly. This method is a no-op for V1; select.py sends the
+          combined settings write instead.
+
+          (An earlier, unverified guess sent AA 04 01 01 [mode] cs as a
+          separate "mode-select" — no capture ever showed the app using this
+          command, and it likely corrupted state. Removed.)
 
         V2 Pro (Wave Pro): CMD_MODE=0x109, "switchMode", LEN=1
           AA 01 09 00 00 01 [mode] [cs]
@@ -784,11 +909,10 @@ class Laifen:
                 self._current_mode_index = mode_index
             return success
 
-        cmd = build_command(0x01, 0x01, mode_index)
-        success = await self.send_command(cmd)
-        if success:
-            self._current_mode_index = mode_index
-        return success
+        # V1: no-op — select.py performs the mode switch via the combined
+        # settings command instead.
+        self._current_mode_index = mode_index
+        return True
 
     async def _set_v2pro_mode_params(self, strength: int | None = None,
                                       range_: int | None = None,
@@ -822,23 +946,57 @@ class Laifen:
             build_v2pro_command(0x0109, [mode_index, cur_strength, cur_range, cur_speed])
         )
 
+    def _v1_active_settings(self) -> tuple[int, int, int, int]:
+        """Return (mode_index, strength, range, speed) for the active mode,
+        reading current values from the last parsed status so that changing
+        one slider preserves the other two."""
+        r = self.result or {}
+        mode_index = r.get("mode_index", self._current_mode_index)
+        strength = r.get("active_strength", r.get("vibration_strength", 1)) or 1
+        range_   = r.get("active_range",    r.get("oscillation_range", 1)) or 1
+        speed    = r.get("active_speed",    r.get("oscillation_speed", 1)) or 1
+        return mode_index, strength, range_, speed
+
     async def set_vibration_strength(self, value: int) -> bool:
-        """Set vibration strength for the currently active mode. param=0x02 (V1) / setMode (V2 Pro)."""
+        """Set vibration strength for the currently active mode.
+
+        V1: sends the full AA 04 01 04 [mode][str][rng][spd] command with the
+        other two values preserved from the current status. V2 Pro: delegates
+        to the mode-params setter.
+        """
         if self._proto_version == "v2pro":
             return await self._set_v2pro_mode_params(strength=value)
-        return await self.send_command(build_command(0x02, 0x01, value))
+        mode_index, _, range_, speed = self._v1_active_settings()
+        success = await self.send_command(build_v1_settings(mode_index, value, range_, speed))
+        if success and self.result is not None:
+            self.result["active_strength"] = value
+            self.result["vibration_strength"] = value
+            self.coordinator.async_set_updated_data(self.result)
+        return success
 
     async def set_oscillation_range(self, value: int) -> bool:
-        """Set oscillation range for the currently active mode. param=0x03 (V1) / setMode (V2 Pro)."""
+        """Set oscillation range for the currently active mode (V1: combined write)."""
         if self._proto_version == "v2pro":
             return await self._set_v2pro_mode_params(range_=value)
-        return await self.send_command(build_command(0x03, 0x01, value))
+        mode_index, strength, _, speed = self._v1_active_settings()
+        success = await self.send_command(build_v1_settings(mode_index, strength, value, speed))
+        if success and self.result is not None:
+            self.result["active_range"] = value
+            self.result["oscillation_range"] = value
+            self.coordinator.async_set_updated_data(self.result)
+        return success
 
     async def set_oscillation_speed(self, value: int) -> bool:
-        """Set oscillation speed for the currently active mode. param=0x04 (V1) / setMode (V2 Pro)."""
+        """Set oscillation speed for the currently active mode (V1: combined write)."""
         if self._proto_version == "v2pro":
             return await self._set_v2pro_mode_params(speed=value)
-        return await self.send_command(build_command(0x04, 0x01, value))
+        mode_index, strength, range_, _ = self._v1_active_settings()
+        success = await self.send_command(build_v1_settings(mode_index, strength, range_, value))
+        if success and self.result is not None:
+            self.result["active_speed"] = value
+            self.result["oscillation_speed"] = value
+            self.coordinator.async_set_updated_data(self.result)
+        return success
 
     async def set_high_frequency(self, enabled: bool) -> bool:
         """
@@ -972,11 +1130,25 @@ class Laifen:
 
         Range 60-300 seconds (1-5 min) in 30-second steps, matching the app.
         """
-        if self._proto_version != "v2pro":
+        if self._proto_version not in ("v2pro", "v1"):
             _LOGGER.debug(f"[{self.address}] set_brushing_duration: not implemented for {self._proto_version}")
             return False
 
         seconds = max(60, min(300, int(round(value / 30) * 30)))
+
+        if self._proto_version == "v1":
+            # V1 (LFTB01): AA 05 01 02 [dur_hi] [dur_lo] cs — single global
+            # duration, no per-mode looping. CONFIRMED via HCI snoop capture
+            # (2026-08-09).
+            success = await self.send_command(build_v1_duration(seconds))
+            if success and self.result is not None:
+                # Duration is not reported back in the V1 status packet, so
+                # track it optimistically (same approach as High Frequency).
+                self.result["brushing_duration_sec"] = seconds
+                self.result["brushing_duration"] = seconds
+                self.coordinator.async_set_updated_data(self.result)
+            return success
+
         hi = (seconds >> 8) & 0xFF
         lo = seconds & 0xFF
 
