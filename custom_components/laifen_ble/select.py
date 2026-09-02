@@ -56,8 +56,14 @@ class LaifenModeSelect(CoordinatorEntity, SelectEntity):
         self._refresh_options()
         # Read active mode from the status packet (mode_nibble from data_str[9])
         # This reflects what the physical button has selected on the device.
-        mode_index = (self.device.result or {}).get("mode_index",
-                      self.device._current_mode_index)
+        # getattr(..., 0) fallback: defends against the entity rendering
+        # state before the device object has fully initialized (e.g. right
+        # after a reload, before any status packet has been parsed) — avoids
+        # an AttributeError crash-loop in the coordinator update path, which
+        # previously fired every second and bloated the HA database/log.
+        mode_index = (self.device.result or {}).get(
+            "mode_index", getattr(self.device, "_current_mode_index", 0)
+        )
         label = f"Mode {mode_index + 1}"
         if label not in self._attr_options:
             return self._attr_options[-1]
