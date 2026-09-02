@@ -158,6 +158,11 @@ class Laifen:
         self._proto_version  = None        # "v1" or "v2"
         self._brushing_active = False      # V2 only
 
+        # ── State tracking ────────────────────────────────────────────────
+        # mode_index: byte[4] echoes the last-written value for ANY command,
+        # so it is unreliable after slider writes. We track it explicitly.
+        self._current_mode_index: int = 0
+
     @property
     def is_v1_device(self) -> bool:
         """True if this is a V1 (LFTB01) toothbrush.
@@ -186,11 +191,6 @@ class Laifen:
             return False
         name = (self.name or "").upper()
         return "LFTB02" in name
-
-        # ── State tracking ────────────────────────────────────────────────
-        # mode_index: byte[4] echoes the last-written value for ANY command,
-        # so it is unreliable after slider writes. We track it explicitly.
-        self._current_mode_index: int = 0
 
     # ──────────────────────────────────────────────────────────────────
     # Connection management
