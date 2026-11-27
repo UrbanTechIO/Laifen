@@ -488,6 +488,7 @@ class Laifen:
           [16]    Mode 4 — Oscillation Speed
           [17]    Airplane mode flag  (0=off, 1=on)
           [18]    Battery level (%)
+          [20-21] Brushing duration in seconds, big-endian
           [22]    High Frequency flag (0=off, 1=on)
           [23]    Running flag: 0x01 = Running, 0x00 = Idle
                   (data_str[47]=='1' is the same check)
@@ -573,6 +574,11 @@ class Laifen:
                 # brushing flag tracked elsewhere (physical button / commands).
                 status = "Running" if self._brushing_active else "Idle"
 
+            if len(data) > 21:
+                brushing_duration_sec = int.from_bytes(data[20:22], "big")
+            else:
+                brushing_duration_sec = prev.get("brushing_duration_sec")
+
             return {
                 "raw_data":           data_str,
                 "status":             status,
@@ -599,12 +605,8 @@ class Laifen:
                 "airplane_mode":      airplane_mode,
                 "high_frequency":     high_frequency,
                 "reminder_30s":       prev.get("reminder_30s", False),
-                # Duration is not reported in the V1 status packet — it is
-                # set optimistically by the Brushing Duration slider and must
-                # survive subsequent status parses (same pattern as
-                # reminder_30s/high_frequency above), otherwise it reverts to
-                # "Unknown" on the next status update / reconnect.
-                "brushing_duration_sec": prev.get("brushing_duration_sec"),
+                "brushing_duration":     brushing_duration_sec,
+                "brushing_duration_sec": brushing_duration_sec,
             }
         except Exception as e:
             _LOGGER.debug(f"V1 parse error: {e}")
@@ -1142,8 +1144,9 @@ class Laifen:
             # (2026-08-09).
             success = await self.send_command(build_v1_duration(seconds))
             if success and self.result is not None:
-                # Duration is not reported back in the V1 status packet, so
-                # track it optimistically (same approach as High Frequency).
+                # The brush only acknowledges this write without sending a
+                # new status packet, so track it optimistically until the
+                # next one reports it.
                 self.result["brushing_duration_sec"] = seconds
                 self.result["brushing_duration"] = seconds
                 self.coordinator.async_set_updated_data(self.result)

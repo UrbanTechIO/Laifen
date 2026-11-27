@@ -111,7 +111,7 @@ class LaifenSensor(CoordinatorEntity, RestoreEntity, SensorEntity):
     @property
     def available(self) -> bool:
         # Only expose this sensor if the device has ever reported this key.
-        # This hides V2 Pro-only sensors (brushing_duration, over_pressure_level,
+        # This hides V2 Pro-only sensors (over_pressure_level,
         # active_strength/range/speed) from V1 devices, and vice versa, without
         # needing any per-sensor proto_version checks.
         if not self.device.result:
