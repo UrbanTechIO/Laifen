@@ -203,11 +203,10 @@ class LaifenBrushingDuration(CoordinatorEntity, RestoreEntity, NumberEntity):
     in minutes (1-5 min, step 0.5) for a user-friendly slider. Conversion to
     seconds happens internally before sending the command.
 
-    Neither device reports duration back in its status packet, so it is
-    tracked optimistically: set on write, preserved across status parses
-    (see build_v1_settings-adjacent handling in laifen.py / _parse_v1), and
-    restored from HA's state store on startup so a fresh connection doesn't
-    show "Unknown" before the value has been set at least once this session.
+    Both devices report the duration in their status packet. It is also set
+    optimistically on write, so the slider updates before the next status
+    packet, and restored from HA's state store on startup so a fresh
+    connection doesn't show "Unknown" before the first status packet.
     """
 
     _attr_has_entity_name = True
