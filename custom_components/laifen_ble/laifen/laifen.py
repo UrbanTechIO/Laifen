@@ -560,19 +560,15 @@ class Laifen:
             # device, so it is tracked optimistically (set by the HF switch)
             # rather than parsed here — preserve whatever is cached.
             airplane_mode  = bool(data[17]) if len(data) > 17 else False
+            status         = "Running" if (len(data) >= 25 and data[23] == 0x01) else "Idle"
             if len(data) >= 26:
-                # Legacy 26-byte layout (older LFTB01): battery [18], HF [22],
-                # running [23].
+                # Legacy 26-byte layout (older LFTB01): battery [18], HF [22].
                 battery_level  = data[18]
                 high_frequency = bool(data[22]) if len(data) > 22 else prev.get("high_frequency", False)
-                status = "Running" if (len(data) > 23 and data[23] == 0x01) else "Idle"
             else:
                 # 20-byte layout (LFTB01-P-*): battery [18]; HF not present.
                 battery_level  = data[18] if len(data) > 18 else prev.get("battery_level", 0)
                 high_frequency = prev.get("high_frequency", False)
-                # Running state is not distinguishable in this packet; keep the
-                # brushing flag tracked elsewhere (physical button / commands).
-                status = "Running" if self._brushing_active else "Idle"
 
             if len(data) > 21:
                 brushing_duration_sec = int.from_bytes(data[20:22], "big")
